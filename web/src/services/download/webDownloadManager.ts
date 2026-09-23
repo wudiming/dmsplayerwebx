@@ -2,15 +2,36 @@ import type {
   DownloadRequest,
   DownloadTask,
   DownloadProgress,
-  DownloadStatus,
+  DownloadFolderScheme,
+  DownloadLyricFormat,
 } from "@shared/types/download";
 import { resolveDownloadSource } from "@/services/download/source";
+import { resolveDownloadLyric } from "@/services/download/lyric";
+import { buildDownloadLyric } from "@/utils/lyric/serialize";
 import { getStoredDownloadDirHandle } from "./downloadDirStorage";
 
-const STORAGE_KEY = "splayer_web_download_tasks";
+const STORAGE_KEY_TASKS = "splayer_web_download_tasks";
+const STORAGE_KEY_CONFIG = "splayer_web_config";
 
 type StateListener = (task: DownloadTask) => void;
 type ProgressListener = (progress: DownloadProgress) => void;
+
+function sanitize(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "_").trim();
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string): void {
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  }, 1500);
+}
 
 class WebDownloadManager {
   private tasks: DownloadTask[] = [];
@@ -23,10 +44,9 @@ class WebDownloadManager {
 
   private loadFromStorage() {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
+      const data = localStorage.getItem(STORAGE_KEY_TASKS);
       if (data) {
         this.tasks = JSON.parse(data);
-        // 重置未完成任务为 interrupted
         for (const t of this.tasks) {
           if (t.status === "downloading" || t.status === "queued") {
             t.status = "interrupted";
@@ -40,10 +60,8 @@ class WebDownloadManager {
 
   private saveToStorage() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.tasks.slice(0, 200)));
-    } catch {
-      // 忽略存储超额异常
-    }
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(this.tasks.slice(0, 200)));
+    } catch {}
   }
 
   private emitState(task: DownloadTask) {
@@ -105,7 +123,7 @@ class WebDownloadManager {
     }
     this.emitState(task);
 
-    // 异步执行下载流程
+    // 异步执行下载全流程
     void this.processTask(task, req);
 
     return { ok: true };
@@ -116,7 +134,48 @@ class WebDownloadManager {
     this.emitState(task);
 
     try {
-      // 1. 获取对应清晰度直链
+      // 1. 读取系统下载配置各项设置
+      let template = "{artist} - {title}";
+      let folderScheme: DownloadFolderScheme = "none";
+      let overwritePolicy: "rename" | "overwrite" | "skip" = "rename";
+      let lyricFormat: DownloadLyricFormat = "enhanced-lrc";
+      let embedCover = true;
+      let embedMeta = true;
+      let embedLyric = true;
+      let writeLrc = false;
+      let saveTtml = false;
+
+      try {
+        const cfgRaw = localStorage.getItem(STORAGE_KEY_CONFIG);
+        if (cfgRaw) {
+          const cfg = JSON.parse(cfgRaw);
+          if (cfg.download) {
+            if (cfg.download.fileTemplate) template = cfg.download.fileTemplate;
+            if (cfg.download.folderScheme) folderScheme = cfg.download.folderScheme;
+            if (cfg.download.overwritePolicy) overwritePolicy = cfg.download.overwritePolicy;
+            if (cfg.download.lyricFileFormat) lyricFormat = cfg.download.lyricFileFormat;
+            if (typeof cfg.download.embedCover === "boolean") embedCover = cfg.download.embedCover;
+            if (typeof cfg.download.embedMeta === "boolean") embedMeta = cfg.download.embedMeta;
+            if (typeof cfg.download.embedLyric === "boolean") embedLyric = cfg.download.embedLyric;
+            if (typeof cfg.download.writeLrc === "boolean") writeLrc = cfg.download.writeLrc;
+            if (typeof cfg.download.saveTtml === "boolean") saveTtml = cfg.download.saveTtml;
+          }
+        }
+      } catch {}
+
+      // 若请求中的 tagOptions 显式传入，则以单次请求为准
+      if (req.tagOptions) {
+        if (typeof req.tagOptions.embedCover === "boolean") embedCover = req.tagOptions.embedCover;
+        if (typeof req.tagOptions.embedMeta === "boolean") embedMeta = req.tagOptions.embedMeta;
+        if (typeof req.tagOptions.embedLyric === "boolean") embedLyric = req.tagOptions.embedLyric;
+        if (typeof req.tagOptions.writeLrc === "boolean") writeLrc = req.tagOptions.writeLrc;
+        if (typeof req.tagOptions.saveTtml === "boolean") saveTtml = req.tagOptions.saveTtml;
+      }
+      if (req.lyricFileFormat) {
+        lyricFormat = req.lyricFileFormat;
+      }
+
+      // 2. 解析下载音频直链
       const resolved = await resolveDownloadSource(
         req.track,
         req.qualityLevel,
@@ -131,149 +190,218 @@ class WebDownloadManager {
         return;
       }
 
-      // 2. 生成规范文件名（根据配置 downloadFileTemplate）
-      const artists =
-        req.track.artists?.map((a) => a.name).join(" & ") || "未知歌手";
-      const title = req.track.title || "未知曲目";
-      const ext = resolved.format || "mp3";
-
-      let template = "{artist} - {title}";
-      let lyricFormat = "lrc";
-      try {
-        const cfgRaw = localStorage.getItem("splayer_web_system_config");
-        if (cfgRaw) {
-          const cfg = JSON.parse(cfgRaw);
-          if (cfg.download?.fileTemplate) template = cfg.download.fileTemplate;
-          if (cfg.download?.lyricFileFormat) lyricFormat = cfg.download.lyricFileFormat;
+      // 3. 解析歌词（供内嵌或导出 .lrc/.ttml）
+      let lrcText: string | null = null;
+      let ttmlText: string | null = null;
+      if (embedLyric || writeLrc || saveTtml) {
+        try {
+          const lyric = await resolveDownloadLyric(req.track);
+          if (lyric) {
+            const input = {
+              content: lyric.content,
+              translation: lyric.translation,
+              translationFormat: lyric.translationFormat,
+              romaji: lyric.romaji,
+              romajiFormat: lyric.romajiFormat,
+            };
+            if (embedLyric || writeLrc) {
+              lrcText = buildDownloadLyric(input, lyric.format, lyricFormat);
+            }
+            if (saveTtml) {
+              ttmlText = buildDownloadLyric(input, lyric.format, "ttml");
+            }
+          }
+        } catch (err) {
+          console.warn("[WebDownloadManager] Failed to resolve download lyric:", err);
         }
-      } catch {}
+      }
+
+      // 4. 计算文件名与扩展名（支持 fileTemplate）
+      const artists = req.track.artists?.map((a) => a.name).join(" & ") || "未知歌手";
+      const title = req.track.title || "未知曲目";
+      const album = req.track.album?.name || "未知专辑";
+      const ext = (resolved.format || "mp3").toLowerCase();
 
       let baseName = template
         .replace(/\{artist\}/g, artists)
         .replace(/\{title\}/g, title)
-        .replace(/[\\/:*?"<>|]/g, "_");
-      if (!baseName.trim()) baseName = `${artists} - ${title}`.replace(/[\\/:*?"<>|]/g, "_");
+        .replace(/\{album\}/g, album);
+      baseName = sanitize(baseName) || `${sanitize(artists)} - ${sanitize(title)}`;
       const filename = `${baseName}.${ext}`;
 
-      // 3. 通过内置流代理下载为 Blob 并保存到系统下载目录
-      let downloadedViaBlob = false;
-      const proxyUrl = `/api/proxy/stream?url=${encodeURIComponent(resolved.url)}`;
-      try {
-        const response = await fetch(proxyUrl);
-        if (response.ok && response.body) {
-          const contentLength = Number(response.headers.get("content-length")) || 0;
-          if (contentLength > 0) {
-            task.total = contentLength;
-          }
+      // 5. 解析目标下载目录句柄（支持 folderScheme: none / artist / artist-album）
+      const rootDirHandle = await getStoredDownloadDirHandle();
+      let targetDirHandle: FileSystemDirectoryHandle | null = null;
 
-          const reader = response.body.getReader();
-          const chunks: Uint8Array[] = [];
-          let received = 0;
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) {
-              chunks.push(value);
-              received += value.length;
-              task.received = received;
-              this.emitProgress({ taskId: task.taskId, received, total: task.total || received });
-            }
-          }
-
-          const mimeType = ext === "flac" ? "audio/flac" : "audio/mpeg";
-          const blob = new Blob(chunks as BlobPart[], { type: mimeType });
-
-          let savedToCustomHandle = false;
-          try {
-            const dirHandle = await getStoredDownloadDirHandle();
-            if (dirHandle) {
-              const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-              const writable = await fileHandle.createWritable();
-              await writable.write(blob);
-              await writable.close();
-              savedToCustomHandle = true;
-            }
-          } catch (customErr) {
-            console.warn("[WebDownloadManager] Write to custom dir failed, falling back to browser download:", customErr);
-          }
-
-          if (!savedToCustomHandle) {
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-              document.body.removeChild(a);
-              URL.revokeObjectURL(blobUrl);
-            }, 1000);
-          }
-          downloadedViaBlob = true;
-        }
-      } catch (err) {
-        console.warn("[WebDownloadManager] Blob download via proxy failed, falling back to direct link:", err);
-        downloadedViaBlob = false;
-      }
-
-      // 4. 若设置或请求开启了歌词下载，自动拉取并保存歌词文件
-      if (req.downloadLyric) {
+      if (rootDirHandle) {
         try {
-          const lyricRes = await window.api.lyrics.matchById(req.track.source || "netease", req.track.id);
-          if (lyricRes?.ok && lyricRes?.data?.lyric) {
-            const lyricContent = lyricRes.data.lyric;
-            const lyricExt = lyricFormat === "enhanced-lrc" ? "elrc" : "lrc";
-            const lyricBlob = new Blob([lyricContent], { type: "text/plain;charset=utf-8" });
-            const lyricFilename = `${baseName}.${lyricExt}`;
-
-            let lyricSavedToCustom = false;
-            try {
-              const dirHandle = await getStoredDownloadDirHandle();
-              if (dirHandle) {
-                const fileHandle = await dirHandle.getFileHandle(lyricFilename, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(lyricBlob);
-                await writable.close();
-                lyricSavedToCustom = true;
-              }
-            } catch {}
-
-            if (!lyricSavedToCustom) {
-              const lyricBlobUrl = URL.createObjectURL(lyricBlob);
-              const lrcA = document.createElement("a");
-              lrcA.href = lyricBlobUrl;
-              lrcA.download = lyricFilename;
-              document.body.appendChild(lrcA);
-              lrcA.click();
-              setTimeout(() => {
-                document.body.removeChild(lrcA);
-                URL.revokeObjectURL(lyricBlobUrl);
-              }, 1000);
-            }
+          if (folderScheme === "artist") {
+            targetDirHandle = await rootDirHandle.getDirectoryHandle(sanitize(artists) || "未知歌手", {
+              create: true,
+            });
+          } else if (folderScheme === "artist-album") {
+            const artistDir = await rootDirHandle.getDirectoryHandle(sanitize(artists) || "未知歌手", {
+              create: true,
+            });
+            targetDirHandle = await artistDir.getDirectoryHandle(sanitize(album) || "未知专辑", {
+              create: true,
+            });
+          } else {
+            targetDirHandle = rootDirHandle;
           }
-        } catch (lrcErr) {
-          console.warn("[WebDownloadManager] Download lyric failed:", lrcErr);
+        } catch (dirErr) {
+          console.warn("[WebDownloadManager] Create subfolder failed, fallback to rootDirHandle:", dirErr);
+          targetDirHandle = rootDirHandle;
         }
       }
 
-      if (!downloadedViaBlob) {
-        const a = document.createElement("a");
-        a.href = proxyUrl;
-        a.download = filename;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-        }, 1000);
+      // 6. 覆盖策略检查 (overwritePolicy: rename / overwrite / skip)
+      let finalFilename = filename;
+      let finalBaseName = baseName;
+
+      if (targetDirHandle) {
+        let exists = false;
+        try {
+          await targetDirHandle.getFileHandle(filename);
+          exists = true;
+        } catch {}
+
+        if (exists) {
+          if (overwritePolicy === "skip") {
+            task.status = "done";
+            task.filePath = filename;
+            task.finishedAt = Date.now();
+            this.emitState(task);
+            return;
+          } else if (overwritePolicy === "rename") {
+            let counter = 1;
+            while (true) {
+              const candidateBase = `${baseName} (${counter})`;
+              const candidateFile = `${candidateBase}.${ext}`;
+              let candExists = false;
+              try {
+                await targetDirHandle.getFileHandle(candidateFile);
+                candExists = true;
+              } catch {}
+              if (!candExists) {
+                finalBaseName = candidateBase;
+                finalFilename = candidateFile;
+                break;
+              }
+              counter++;
+            }
+          }
+        }
       }
 
-      // 4. 标记完成
+      // 7. 调用后端接口进行音频流拉取及标签内嵌 (ID3v2 / FLAC tags)
+      const processPayload = {
+        audioUrl: resolved.url,
+        format: ext,
+        embedMeta,
+        embedCover,
+        embedLyric,
+        title,
+        artist: artists,
+        album,
+        coverUrl: req.track.coverOriginal ?? req.track.cover,
+        lyrics: lrcText || undefined,
+      };
+
+      const response = await fetch("/api/download/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(processPayload),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Download process failed: HTTP ${response.status}`);
+      }
+
+      const contentLength = Number(response.headers.get("content-length")) || resolved.size || 0;
+      if (contentLength > 0) task.total = contentLength;
+
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          received += value.length;
+          task.received = received;
+          this.emitProgress({ taskId: task.taskId, received, total: task.total || received });
+        }
+      }
+
+      const mimeType = ext === "flac" ? "audio/flac" : "audio/mpeg";
+      const audioBlob = new Blob(chunks as BlobPart[], { type: mimeType });
+
+      // 8. 音频文件落盘
+      let savedToHandle = false;
+      if (targetDirHandle) {
+        try {
+          const fileHandle = await targetDirHandle.getFileHandle(finalFilename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(audioBlob);
+          await writable.close();
+          savedToHandle = true;
+        } catch (handleErr) {
+          console.warn("[WebDownloadManager] Write to targetDirHandle failed, fallback to browser:", handleErr);
+        }
+      }
+
+      if (!savedToHandle) {
+        triggerBrowserDownload(audioBlob, finalFilename);
+      }
+
+      // 9. 导出同名歌词文件 (.lrc / .elrc)
+      if (writeLrc && lrcText) {
+        const lyricExt = lyricFormat === "enhanced-lrc" ? "elrc" : "lrc";
+        const lyricFilename = `${finalBaseName}.${lyricExt}`;
+        const lyricBlob = new Blob([lrcText], { type: "text/plain;charset=utf-8" });
+
+        let lrcSaved = false;
+        if (targetDirHandle) {
+          try {
+            const fileHandle = await targetDirHandle.getFileHandle(lyricFilename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(lyricBlob);
+            await writable.close();
+            lrcSaved = true;
+          } catch {}
+        }
+        if (!lrcSaved) {
+          triggerBrowserDownload(lyricBlob, lyricFilename);
+        }
+      }
+
+      // 10. 导出完整 TTML 歌词文件 (.ttml)
+      if (saveTtml && ttmlText) {
+        const ttmlFilename = `${finalBaseName}.ttml`;
+        const ttmlBlob = new Blob([ttmlText], { type: "application/xml;charset=utf-8" });
+
+        let ttmlSaved = false;
+        if (targetDirHandle) {
+          try {
+            const fileHandle = await targetDirHandle.getFileHandle(ttmlFilename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(ttmlBlob);
+            await writable.close();
+            ttmlSaved = true;
+          } catch {}
+        }
+        if (!ttmlSaved) {
+          triggerBrowserDownload(ttmlBlob, ttmlFilename);
+        }
+      }
+
+      // 11. 标记完成
       task.status = "done";
-      task.filePath = filename;
-      task.received = task.total || 1024 * 1024 * 5;
+      task.filePath = finalFilename;
+      task.received = task.total || received;
       task.finishedAt = Date.now();
       this.emitState(task);
     } catch (err: any) {
@@ -290,7 +418,6 @@ class WebDownloadManager {
     for (const req of requests) {
       const res = await this.start(req);
       results.push({ ok: res.ok, taskId: req.taskId });
-      // 间隔 200ms 避免请求风暴
       await new Promise((r) => setTimeout(r, 200));
     }
     return results;

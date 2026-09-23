@@ -12,6 +12,7 @@ import { fetchTTML } from "./apis/common/lyric/ttml.js";
 import { resolveNeteaseEnhancedUrl, getNeteaseEnhancedConfig } from "./apis/plugins/neteaseEnhanced.js";
 import { getCommentSources, getMusicComments } from "./services/comments/index.js";
 import fs from "node:fs";
+import { embedAudioTags } from "./services/tagWriter.js";
 import { coreLog } from "./adapters/logger.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
@@ -155,6 +156,85 @@ export const handleApiRequest = async (
     } catch (err: any) {
       coreLog.error(`[proxy:stream] failed for ${targetUrl}:`, err);
       sendJson(res, 502, { error: err?.message || "Stream proxy error" });
+      return;
+    }
+  }
+
+  // 2.1 下载音频流处理与元数据标签内嵌: POST /api/download/process
+  if (pathname === "/api/download/process" && req.method === "POST") {
+    const data = await readJsonBody(req);
+    const audioUrl = data.audioUrl;
+    if (!audioUrl) {
+      sendJson(res, 400, { error: "Missing audioUrl parameter" });
+      return;
+    }
+
+    try {
+      const needTagging = Boolean(data.embedMeta || data.embedCover || data.embedLyric);
+      if (!needTagging) {
+        // 无需内嵌元数据，直接代理音频流
+        const upstream = await fetch(audioUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        });
+        const contentType = upstream.headers.get("content-type") || "audio/mpeg";
+        const contentLength = upstream.headers.get("content-length");
+        const headers: Record<string, string> = {
+          "Content-Type": contentType,
+          "Access-Control-Allow-Origin": "*",
+        };
+        if (contentLength) headers["Content-Length"] = contentLength;
+        res.writeHead(upstream.status, headers);
+        const arrayBuf = await upstream.arrayBuffer();
+        res.end(Buffer.from(arrayBuf));
+        return;
+      }
+
+      // 需要内嵌标签：并行获取音频与封面图
+      const fetchAudio = fetch(audioUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`Fetch audio upstream failed: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      });
+
+      const fetchCover = (data.embedCover && data.coverUrl)
+        ? fetch(data.coverUrl)
+            .then(async (r) => {
+              if (!r.ok) return null;
+              const mime = r.headers.get("content-type") || "image/jpeg";
+              const buf = Buffer.from(await r.arrayBuffer());
+              return { buf, mime };
+            })
+            .catch(() => null)
+        : Promise.resolve(null);
+
+      const [audioRaw, coverInfo] = await Promise.all([fetchAudio, fetchCover]);
+      const audioBuffer = Buffer.from(audioRaw);
+
+      const meta = {
+        title: data.embedMeta ? data.title : undefined,
+        artist: data.embedMeta ? data.artist : undefined,
+        album: data.embedMeta ? data.album : undefined,
+        lyrics: data.embedLyric ? data.lyrics : undefined,
+        coverBuffer: coverInfo?.buf,
+        coverMime: coverInfo?.mime,
+      };
+
+      const taggedBuffer = embedAudioTags(audioBuffer, data.format, meta);
+      const isFlac =
+        data.format?.toLowerCase() === "flac" ||
+        (taggedBuffer.length >= 4 && taggedBuffer.toString("ascii", 0, 4) === "fLaC");
+
+      res.writeHead(200, {
+        "Content-Type": isFlac ? "audio/flac" : "audio/mpeg",
+        "Content-Length": String(taggedBuffer.length),
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(taggedBuffer);
+      return;
+    } catch (err: any) {
+      coreLog.error(`[download:process] failed for ${audioUrl}:`, err);
+      sendJson(res, 502, { error: err?.message || "Download process error" });
       return;
     }
   }
