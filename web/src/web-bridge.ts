@@ -1021,6 +1021,51 @@ try {
 const hotkeyConflictSubscribers = new Set<(conflicts: any[]) => void>();
 const hotkeyTriggerSubscribers = new Set<(id: HotkeyActionId) => void>();
 
+/**
+ * 等比压缩/缩放超大壁纸，防止 Base64 超过 localStorage 5MB 限制
+ */
+function compressBackgroundImage(dataUrl: string, maxDim = 2560): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width;
+      let h = img.height;
+      if (w <= maxDim && h <= maxDim && dataUrl.length < 1024 * 1024 * 1.5) {
+        resolve(dataUrl);
+        return;
+      }
+      if (w > h && w > maxDim) {
+        h = Math.round((h * maxDim) / w);
+        w = maxDim;
+      } else if (h > maxDim) {
+        w = Math.round((w * maxDim) / h);
+        h = maxDim;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        const webp = canvas.toDataURL("image/webp", 0.88);
+        resolve(webp);
+      } catch {
+        try {
+          resolve(canvas.toDataURL("image/jpeg", 0.88));
+        } catch {
+          resolve(dataUrl);
+        }
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 // ─── 4. 构建 window.api 完整门面 ───
 
 const webApi = {
@@ -1205,14 +1250,34 @@ const webApi = {
     focusMainWindow: async () => {},
     openSettings: async () => {},
     onOpenSettings: () => () => {},
-    listFonts: async () => [
-      "PingFang SC",
-      "Microsoft YaHei",
-      "Inter",
-      "Segoe UI",
-      "system-ui",
-      "sans-serif",
-    ],
+    listFonts: async () => {
+      if (typeof window !== "undefined" && "queryLocalFonts" in window) {
+        try {
+          const localFonts = await (window as any).queryLocalFonts();
+          const fontSet = new Set<string>();
+          for (const f of localFonts) {
+            if (f.family) fontSet.add(f.family);
+          }
+          if (fontSet.size > 0) {
+            return Array.from(fontSet).sort((a, b) => a.localeCompare(b, "zh-CN"));
+          }
+        } catch {}
+      }
+      return [
+        "PingFang SC",
+        "Microsoft YaHei",
+        "HarmonyOS Sans SC",
+        "SimSun",
+        "SimHei",
+        "KaiTi",
+        "Inter",
+        "Segoe UI",
+        "SF Pro Display",
+        "Roboto",
+        "system-ui",
+        "sans-serif",
+      ];
+    },
     fetchRemoteBytes: async (url: string) => {
       try {
         const res = await fetch(url);
@@ -1859,15 +1924,47 @@ const webApi = {
         const input = document.createElement("input");
         input.type = "file";
         input.accept = "image/*";
+
+        let resolved = false;
+        const finish = (result: string | null) => {
+          if (!resolved) {
+            resolved = true;
+            window.removeEventListener("focus", onFocus);
+            resolve(result);
+          }
+        };
+
+        const onFocus = () => {
+          // 用户若点击取消关闭文件对话框，窗口会重新获取焦点
+          setTimeout(() => {
+            if (!resolved && (!input.files || input.files.length === 0)) {
+              finish(null);
+            }
+          }, 600);
+        };
+
+        input.oncancel = () => finish(null);
+        window.addEventListener("focus", onFocus, { once: true });
+
         input.onchange = () => {
           const file = input.files?.[0];
           if (!file) {
-            resolve(null);
+            finish(null);
             return;
           }
           const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => resolve(null);
+          reader.onload = async () => {
+            const rawData = reader.result as string;
+            try {
+              // 自动对超大壁纸进行等比适度压缩（限制最大尺寸 2560px），
+              // 避免以 5MB~10MB Base64 写入 localStorage 引发 QuotaExceededError 崩溃
+              const compressed = await compressBackgroundImage(rawData, 2560);
+              finish(compressed);
+            } catch {
+              finish(rawData);
+            }
+          };
+          reader.onerror = () => finish(null);
           reader.readAsDataURL(file);
         };
         input.click();

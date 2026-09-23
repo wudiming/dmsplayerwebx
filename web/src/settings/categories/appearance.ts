@@ -171,7 +171,7 @@ const appearanceCategory: SettingCategory = {
           key: "showQualitySwitch",
           type: "switch",
           binding: { store: "settings", path: "appearance.showQualitySwitch" },
-          defaultValue: false,
+          defaultValue: true,
         },
       ],
     },

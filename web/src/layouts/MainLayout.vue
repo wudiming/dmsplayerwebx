@@ -165,8 +165,6 @@ const playerBarInnerClass = computed(() => {
 
   <!-- Toast -->
   <SToast :max="1" />
-  <!-- 性能监视器 -->
-  <SPerformanceMonitor v-if="appearance.showPerformanceMonitor" />
   <!-- Dialog -->
   <SDialogProvider />
   <!-- 全屏播放器 -->
