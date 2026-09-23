@@ -1,0 +1,63 @@
+# ==========================================
+# Stage 1: Build SPlayer WebX application
+# ==========================================
+FROM node:20-alpine AS builder
+
+WORKDIR /build
+
+# Enable corepack and prepare pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy package descriptors and lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY web/package.json ./web/
+COPY server/package.json ./server/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source files
+COPY web/ ./web/
+COPY server/ ./server/
+
+# Build backend and client production bundle
+RUN pnpm --filter splayer-server build
+RUN pnpm --filter splayer-web build
+
+# ==========================================
+# Stage 2: Production runtime container
+# ==========================================
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Install curl for plugin auto-updater and ca-certificates
+RUN apk add --no-cache curl ca-certificates tzdata
+
+ENV NODE_ENV=production
+ENV PORT=5173
+ENV DIST_DIR=/app/dist
+ENV PLUGIN_DIR=/app/plugins
+ENV AUTO_UPDATE_PLUGINS=true
+
+# Create directories
+RUN mkdir -p /app/dist /app/plugins /app/scripts
+
+# Copy production bundle from builder
+COPY --from=builder /build/web/dist /app/dist
+
+# Copy pre-packaged plugin
+COPY web/public/plugins/npi.netease.source.js /app/plugins/npi.netease.source.js
+
+# Copy runtime scripts and backend bundle
+COPY --from=builder /build/server/dist/handler.mjs /app/scripts/handler.mjs
+COPY docker/server.mjs /app/scripts/server.mjs
+COPY docker/update-plugins.sh /app/scripts/update-plugins.sh
+COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+
+# Ensure executable permissions
+RUN chmod +x /app/scripts/update-plugins.sh /app/docker-entrypoint.sh
+
+EXPOSE 5173
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

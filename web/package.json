@@ -1,0 +1,51 @@
+{
+  "name": "splayer-web",
+  "version": "1.2.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@applemusic-like-lyrics/core": "^0.5.2",
+    "@material/material-color-utilities": "^0.4.0",
+    "@pixi/app": "^7.4.3",
+    "@pixi/core": "^7.4.3",
+    "@pixi/display": "^7.4.3",
+    "@pixi/filter-blur": "^7.4.3",
+    "@pixi/filter-bulge-pinch": "^5.1.1",
+    "@pixi/filter-color-matrix": "^7.4.3",
+    "@pixi/sprite": "^7.4.3",
+    "@vueuse/core": "^14.4.0",
+    "@vueuse/integrations": "^14.4.0",
+    "colord": "^2.9.3",
+    "localforage": "^1.10.0",
+    "lyric-dom": "^0.1.2",
+    "lyric-kit": "^0.5.4",
+    "marked": "^18.0.9",
+    "pinia": "^4.0.2",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "reka-ui": "^2.10.1",
+    "sortablejs": "^1.15.7",
+    "uqr": "^0.1.3",
+    "vue": "^3.5.41",
+    "vue-i18n": "^11.4.8",
+    "vue-router": "^5.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.101",
+    "@iconify-json/material-symbols": "^1.2.88",
+    "@types/node": "^22.19.17",
+    "@types/sortablejs": "^1.15.9",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^5.9.3",
+    "unocss": "^66.7.5",
+    "unplugin-auto-import": "^21.1.0",
+    "unplugin-icons": "^23.0.1",
+    "unplugin-vue-components": "^31.1.0",
+    "vite": "^7.3.6"
+  }
+}

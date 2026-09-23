@@ -1,0 +1,21 @@
+services:
+  splayer-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: splayer-web:latest
+    container_name: splayer-web
+    restart: always
+    ports:
+      - "5173:5173"
+    environment:
+      - PORT=5173
+      - AUTO_UPDATE_PLUGINS=true
+      - TZ=Asia/Shanghai
+    volumes:
+      # 持久化保存自动更新的插件文件，容器重启不丢失
+      - splayer-plugins:/app/plugins
+
+volumes:
+  splayer-plugins:
+    driver: local

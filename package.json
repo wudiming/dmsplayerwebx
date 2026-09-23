@@ -1,0 +1,15 @@
+{
+  "name": "splayer-web-workspace",
+  "version": "1.2.0",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter splayer-web dev",
+    "build:web": "pnpm --filter splayer-web build",
+    "dev:server": "pnpm --filter splayer-server dev",
+    "build:server": "pnpm --filter splayer-server build",
+    "build": "pnpm build:server && pnpm build:web"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.11.0"
+  }
+}
