@@ -55,7 +55,10 @@ export const useDownload = () => {
         }
       }
     } catch (err: any) {
-      if (err?.name !== "AbortError") {
+      if (err?.name === "AbortError") return;
+      if (err?.name === "SecurityError" || String(err?.message || "").includes("sensitive")) {
+        toast.warning("浏览器安全限制禁止直接选择系统“下载”根目录，您可以在其中新建子文件夹（如“音乐”）后再选择");
+      } else {
         console.warn("[useDownload] Directory picker error:", err);
       }
     }

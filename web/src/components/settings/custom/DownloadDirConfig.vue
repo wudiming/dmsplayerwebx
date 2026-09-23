@@ -35,8 +35,15 @@ const pickCustomDir = async () => {
       toast.success(`已设置下载目录为当前设备上的 [${handle.name}] 文件夹`);
     }
   } catch (err: any) {
-    if (err?.name !== "AbortError") {
-      toast.error("选择文件夹失败");
+    if (err?.name === "AbortError") {
+      // 用户取消选择
+      return;
+    }
+    // 浏览器针对系统敏感文件夹（如系统“下载”根目录）会抛出 SecurityError
+    if (err?.name === "SecurityError" || String(err?.message || "").includes("sensitive")) {
+      toast.error("浏览器出于安全限制禁止网页接管系统“下载”根目录，请在其中新建子文件夹（如“音乐”）后再选择");
+    } else {
+      toast.error("选择文件夹失败，建议在磁盘中新建专用文件夹（如“音乐”）后重新选择");
     }
   }
 };
@@ -72,7 +79,7 @@ onMounted(loadDir);
             v-if="!customDirName && supportsPicker && settings.system.download.folderScheme !== 'none'"
             class="text-xs text-primary mt-1"
           >
-            💡 已开启文件智能分类，建议点击「更改」指定本地目录（如“下载”文件夹），以自动建立歌手/专辑子目录。
+            💡 已开启文件智能分类，建议点击「更改」指定本地文件夹（如“音乐”文件夹或在 D 盘新建“歌曲”子目录，浏览器安全限制禁止直接选“下载”根目录），以自动建立歌手/专辑子目录。
           </div>
         </div>
       </div>
