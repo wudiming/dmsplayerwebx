@@ -17,12 +17,18 @@ export async function setStoredDownloadDirHandle(handle: FileSystemDirectoryHand
   }
 }
 
-export async function getStoredDownloadDirHandle(): Promise<FileSystemDirectoryHandle | null> {
+export async function getStoredDownloadDirHandle(requestIfPrompt = false): Promise<FileSystemDirectoryHandle | null> {
   try {
     const handle = await store.getItem<FileSystemDirectoryHandle>(DIR_HANDLE_KEY);
     if (!handle) return null;
-    const perm = await handle.queryPermission({ mode: "readwrite" });
+    let perm = await handle.queryPermission({ mode: "readwrite" });
     if (perm === "granted") return handle;
+    if (perm === "prompt" && requestIfPrompt) {
+      try {
+        perm = await handle.requestPermission({ mode: "readwrite" });
+        if (perm === "granted") return handle;
+      } catch {}
+    }
     return null;
   } catch {
     return null;

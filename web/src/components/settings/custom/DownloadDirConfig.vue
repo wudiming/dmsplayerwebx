@@ -3,10 +3,12 @@ import IconLucideFolderDown from "~icons/lucide/folder-down";
 import IconLucideFolderCheck from "~icons/lucide/folder-check";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 import { toast } from "@/composables/useToast";
+import { useSettingsStore } from "@/stores/settings";
 
 defineOptions({ inheritAttrs: false });
 
 const { t } = useI18n();
+const settings = useSettingsStore();
 
 const customDirName = ref<string>("");
 const supportsPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
@@ -59,13 +61,19 @@ onMounted(loadDir);
       </div>
       <div class="min-w-0 flex-1">
         <div class="text-base font-medium">{{ t("settings.downloadDir.label") }}</div>
-        <div class="mt-0.5 truncate text-sm text-on-surface-variant/70">
+        <div class="mt-0.5 text-sm text-on-surface-variant/70">
           <span v-if="customDirName">
             当前设备指定文件夹：<span class="font-medium text-primary">{{ customDirName }}</span>
           </span>
           <span v-else>
             当前设备系统默认下载目录
           </span>
+          <div
+            v-if="!customDirName && supportsPicker && settings.system.download.folderScheme !== 'none'"
+            class="text-xs text-primary mt-1"
+          >
+            💡 已开启文件智能分类，建议点击「更改」指定本地目录（如“下载”文件夹），以自动建立歌手/专辑子目录。
+          </div>
         </div>
       </div>
     </div>

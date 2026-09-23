@@ -163,7 +163,10 @@ class WebDownloadManager {
         }
       } catch {}
 
-      // 若请求中的 tagOptions 显式传入，则以单次请求为准
+      // 若请求中明确指定，则以单次请求为准
+      if (req.folderScheme) folderScheme = req.folderScheme;
+      if (req.fileTemplate) template = req.fileTemplate;
+      if (req.overwritePolicy) overwritePolicy = req.overwritePolicy;
       if (req.tagOptions) {
         if (typeof req.tagOptions.embedCover === "boolean") embedCover = req.tagOptions.embedCover;
         if (typeof req.tagOptions.embedMeta === "boolean") embedMeta = req.tagOptions.embedMeta;
@@ -227,23 +230,26 @@ class WebDownloadManager {
         .replace(/\{title\}/g, title)
         .replace(/\{album\}/g, album);
       baseName = sanitize(baseName) || `${sanitize(artists)} - ${sanitize(title)}`;
-      const filename = `${baseName}.${ext}`;
+      let filename = `${baseName}.${ext}`;
 
       // 5. 解析目标下载目录句柄（支持 folderScheme: none / artist / artist-album）
-      const rootDirHandle = await getStoredDownloadDirHandle();
+      const rootDirHandle = await getStoredDownloadDirHandle(true);
       let targetDirHandle: FileSystemDirectoryHandle | null = null;
+
+      const artistFolder = sanitize(artists) || "未知歌手";
+      const albumFolder = sanitize(album) || "未知专辑";
 
       if (rootDirHandle) {
         try {
           if (folderScheme === "artist") {
-            targetDirHandle = await rootDirHandle.getDirectoryHandle(sanitize(artists) || "未知歌手", {
+            targetDirHandle = await rootDirHandle.getDirectoryHandle(artistFolder, {
               create: true,
             });
           } else if (folderScheme === "artist-album") {
-            const artistDir = await rootDirHandle.getDirectoryHandle(sanitize(artists) || "未知歌手", {
+            const artistDir = await rootDirHandle.getDirectoryHandle(artistFolder, {
               create: true,
             });
-            targetDirHandle = await artistDir.getDirectoryHandle(sanitize(album) || "未知专辑", {
+            targetDirHandle = await artistDir.getDirectoryHandle(albumFolder, {
               create: true,
             });
           } else {
@@ -252,6 +258,16 @@ class WebDownloadManager {
         } catch (dirErr) {
           console.warn("[WebDownloadManager] Create subfolder failed, fallback to rootDirHandle:", dirErr);
           targetDirHandle = rootDirHandle;
+        }
+      } else {
+        // 无自定义目录句柄时（浏览器默认下载原生保存）：
+        // 在文件名中直接带上智能分类前缀，确保归入歌手/专辑分组
+        if (folderScheme === "artist") {
+          baseName = `[${artistFolder}] ${baseName}`;
+          filename = `${baseName}.${ext}`;
+        } else if (folderScheme === "artist-album") {
+          baseName = `[${artistFolder} - ${albumFolder}] ${baseName}`;
+          filename = `${baseName}.${ext}`;
         }
       }
 

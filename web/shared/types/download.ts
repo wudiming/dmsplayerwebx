@@ -53,6 +53,12 @@ export interface DownloadRequest {
   usePlaybackForDownload: boolean;
   /** 内嵌歌词与 .lrc 的保存格式 */
   lyricFileFormat: DownloadLyricFormat;
+  /** 文件智能分类方案 */
+  folderScheme?: DownloadFolderScheme;
+  /** 文件名模板 */
+  fileTemplate?: string;
+  /** 文件重名覆盖策略 */
+  overwritePolicy?: "rename" | "overwrite" | "skip";
 }
 
 /** 主进程持有的下载任务 */

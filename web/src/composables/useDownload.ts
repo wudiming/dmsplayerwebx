@@ -3,6 +3,10 @@ import type { DownloadRequest, DownloadTagOptions, DownloadTask } from "@shared/
 import { QUALITY_LABELS, type QualityLevel } from "@/utils/quality";
 import { useSettingsStore } from "@/stores/settings";
 import { toast } from "@/composables/useToast";
+import {
+  getStoredDownloadDirHandle,
+  setStoredDownloadDirHandle,
+} from "@/services/download/downloadDirStorage";
 
 /** 下载选项 */
 interface EnqueueOptions {
@@ -34,6 +38,29 @@ export const buildDownloadQualityItems = (
 export const useDownload = () => {
   const { t } = useI18n();
 
+  /** 若开启了文件智能分类，检查或引导用户选择一次目标文件夹 */
+  const ensureDownloadDirIfCategorized = async (
+    folderScheme: string | undefined,
+  ): Promise<void> => {
+    if (!folderScheme || folderScheme === "none") return;
+    if (typeof window === "undefined" || !("showDirectoryPicker" in window)) return;
+    try {
+      const existing = await getStoredDownloadDirHandle(true);
+      if (!existing) {
+        toast.info("已开启文件智能分类，请选择用于保存音乐的文件夹");
+        const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+        if (handle) {
+          await setStoredDownloadDirHandle(handle);
+          toast.success(`已设置下载目录为 [${handle.name}]，将自动在其中创建歌手/专辑子目录`);
+        }
+      }
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        console.warn("[useDownload] Directory picker error:", err);
+      }
+    }
+  };
+
   /**
    * 构建不含网络解析的下载请求
    * @returns 本地曲目返回 null
@@ -57,6 +84,9 @@ export const useDownload = () => {
       tagOptions,
       usePlaybackForDownload: download.usePlaybackForDownload,
       lyricFileFormat: download.lyricFileFormat,
+      folderScheme: download.folderScheme,
+      fileTemplate: download.fileTemplate,
+      overwritePolicy: download.overwritePolicy,
     };
   };
 
@@ -65,6 +95,9 @@ export const useDownload = () => {
    * @returns 是否成功入队
    */
   const enqueue = async (track: Track, opts: EnqueueOptions = {}): Promise<boolean> => {
+    const download = useSettingsStore().system.download;
+    await ensureDownloadDirIfCategorized(download.folderScheme);
+
     const req = prepareRequest(track, opts);
     if (!req) return false;
     const res = opts.taskId
@@ -82,6 +115,9 @@ export const useDownload = () => {
 
   /** 批量下载 */
   const enqueueMany = async (tracks: Track[]): Promise<void> => {
+    const download = useSettingsStore().system.download;
+    await ensureDownloadDirIfCategorized(download.folderScheme);
+
     const requests = tracks
       .map((track) => prepareRequest(track, {}))
       .filter((req): req is DownloadRequest => req !== null);
