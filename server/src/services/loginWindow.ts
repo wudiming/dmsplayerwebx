@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -5,6 +6,7 @@ import puppeteer from "puppeteer-core";
 import { coreLog } from "../adapters/logger.js";
 
 const NETEASE_COOKIE_KEYS = ["MUSIC_U", "__csrf", "NMTID", "MUSIC_A"];
+const DEBUG_PORT = 9333;
 
 /** 查找系统可用的 Chrome 或 Edge 可执行文件路径 */
 export function findBrowserExecutable(): string | null {
@@ -47,6 +49,7 @@ export function findBrowserExecutable(): string | null {
 }
 
 let currentBrowser: any = null;
+let currentChildProcess: any = null;
 let currentFinishFn: ((result: Record<string, string> | null) => void) | null = null;
 let activeLoginPromise: Promise<Record<string, string> | null> | null = null;
 
@@ -60,6 +63,12 @@ export async function cancelLoginWindow(): Promise<void> {
       await currentBrowser.close().catch(() => {});
     } catch {}
     currentBrowser = null;
+  }
+  if (currentChildProcess) {
+    try {
+      currentChildProcess.kill("SIGKILL");
+    } catch {}
+    currentChildProcess = null;
   }
   activeLoginPromise = null;
 }
@@ -79,7 +88,6 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
     throw new Error("NO_LOCAL_BROWSER: 未检测到本地 Chrome 或 Edge 浏览器");
   }
 
-  // 使用独立持久化的登录目录，与日常 Chrome 完全隔离，同时保留登录会话
   const loginProfileDir = path.join(os.homedir(), ".splayer", "login_profile");
   try {
     fs.mkdirSync(loginProfileDir, { recursive: true });
@@ -89,27 +97,41 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
     let pollInterval: NodeJS.Timeout | null = null;
 
     try {
-      coreLog.info("[loginWindow] Launching browser:", executablePath);
-      const browser = await puppeteer.launch({
+      coreLog.info("[loginWindow] Spawning Chrome App window:", executablePath);
+
+      // 直接使用 spawn 拉起原生 App 窗口模式，确保窗口在操作系统顶层前台显示
+      const child = spawn(
         executablePath,
-        headless: false,
-        defaultViewport: null,
-        userDataDir: loginProfileDir,
-        ignoreDefaultArgs: ["--enable-automation"],
-        args: [
+        [
+          "--app=https://music.163.com/#/login",
           "--window-size=1024,720",
-          "--no-sandbox",
-          "--disable-blink-features=AutomationControlled",
+          `--user-data-dir=${loginProfileDir}`,
+          `--remote-debugging-port=${DEBUG_PORT}`,
           "--no-first-run",
           "--no-default-browser-check",
         ],
-      });
-      currentBrowser = browser;
+        {
+          detached: true,
+          stdio: "ignore",
+        },
+      );
+      child.unref();
+      currentChildProcess = child;
 
-      const pages = await browser.pages();
-      const page = pages.length > 0 ? pages[0] : await browser.newPage();
-      await page.goto("https://music.163.com/#/login", { waitUntil: "domcontentloaded" });
-      await page.bringToFront().catch(() => {});
+      // 等待并连接 CDP 调试端口进行 Cookie 监听与提取
+      let browser: any = null;
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        try {
+          browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${DEBUG_PORT}` });
+          if (browser) break;
+        } catch {}
+      }
+
+      if (!browser) {
+        throw new Error("无法连接至登录窗口调试端口");
+      }
+      currentBrowser = browser;
 
       return await new Promise<Record<string, string> | null>(async (resolve) => {
         let settled = false;
@@ -128,6 +150,12 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
             }
           } catch {}
           currentBrowser = null;
+          if (currentChildProcess) {
+            try {
+              currentChildProcess.kill();
+            } catch {}
+            currentChildProcess = null;
+          }
           resolve(result);
         };
 
@@ -137,13 +165,12 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
           finish(null);
         });
 
-        page.on("close", () => {
-          finish(null);
-        });
-
         const checkCookies = async (): Promise<boolean> => {
           try {
             if (!browser || !browser.connected) return false;
+            const pages = await browser.pages();
+            if (!pages || pages.length === 0) return false;
+            const page = pages[0];
             const cookies = await page.cookies();
             const musicU = cookies.find((c: any) => c.name === "MUSIC_U");
             if (musicU?.value) {
@@ -161,7 +188,8 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
           return false;
         };
 
-        // 1. 若此前已登录，直接获取并关闭窗口
+        // 1. 若此前已登录，等待页面首包完成后直接获取并关闭窗口
+        await new Promise((r) => setTimeout(r, 600));
         if (await checkCookies()) return;
 
         // 2. 轮询检测：等待用户在窗口中登录完成
@@ -172,6 +200,7 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
     } finally {
       activeLoginPromise = null;
       currentBrowser = null;
+      currentChildProcess = null;
       currentFinishFn = null;
     }
   })();
