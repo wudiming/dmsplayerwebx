@@ -25,17 +25,12 @@ const groupedActions = computed(() => {
   return Array.from(groups, ([category, actions]) => ({ category, actions }));
 });
 
-/** 快捷键作用域 */
-type Scope = "inApp" | "global";
-
 /** 录入目标 */
-const recordingTarget = ref<{ id: HotkeyActionId; scope: Scope } | null>(null);
+const recordingTarget = ref<HotkeyActionId | null>(null);
 
 /** 错误信息 */
 const errorFor = ref<{
   id: HotkeyActionId;
-  scope: Scope;
-  kind: "duplicate" | "crossScope" | "osOccupied";
   conflictWith?: HotkeyActionId;
 } | null>(null);
 
@@ -53,47 +48,19 @@ const labelOf = (id: HotkeyActionId): string => {
 /** 录入器 */
 const recorder = useHotkeyRecorder({
   isMac: isMac,
-  // 避免单键（如 A / Space）被全局占用
-  requireModifier: () => recordingTarget.value?.scope === "global",
+  requireModifier: () => false,
   onConfirm: async (accel) => {
     const target = recordingTarget.value;
     if (!target) return;
     recordingTarget.value = null;
-    /** 冲突检测：in-app 仅查同 scope 重复；global 同时查跨 scope 与 OS 占用 */
-    if (target.scope === "inApp") {
-      const dup = hotkey.findInAppDuplicate(accel, target.id);
-      if (dup) {
-        errorFor.value = { id: target.id, scope: "inApp", kind: "duplicate", conflictWith: dup };
-        toast.error(t("settings.hotkeys.duplicateWith", { action: labelOf(dup) }));
-        return;
-      }
-    } else {
-      const conflict = hotkey.findGlobalConflict(accel, target.id);
-      if (conflict) {
-        const kind = conflict.scope === "global" ? "duplicate" : "crossScope";
-        errorFor.value = {
-          id: target.id,
-          scope: "global",
-          kind,
-          conflictWith: conflict.id,
-        };
-        const msgKey =
-          kind === "crossScope"
-            ? "settings.hotkeys.crossScopeWith"
-            : "settings.hotkeys.duplicateWith";
-        toast.error(t(msgKey, { action: labelOf(conflict.id) }));
-        return;
-      }
-      const ok = await hotkey.probe(accel);
-      if (!ok) {
-        errorFor.value = { id: target.id, scope: "global", kind: "osOccupied" };
-        toast.error(t("settings.hotkeys.osOccupied"));
-        return;
-      }
+    const dup = hotkey.findInAppDuplicate(accel, target);
+    if (dup) {
+      errorFor.value = { id: target, conflictWith: dup };
+      toast.error(t("settings.hotkeys.duplicateWith", { action: labelOf(dup) }));
+      return;
     }
-    /** 更新绑定 */
-    const cur = hotkey.bindings[target.id] ?? { inApp: null, global: null };
-    await hotkey.updateBinding(target.id, { ...cur, [target.scope]: accel });
+    const cur = hotkey.bindings[target] ?? { inApp: null, global: null };
+    await hotkey.updateBinding(target, { ...cur, inApp: accel });
   },
   onCancel: () => {
     recordingTarget.value = null;
@@ -103,25 +70,20 @@ const recorder = useHotkeyRecorder({
     recordingTarget.value = null;
     if (!target) return;
     clearError();
-    const cur = hotkey.bindings[target.id] ?? { inApp: null, global: null };
-    await hotkey.updateBinding(target.id, { ...cur, [target.scope]: null });
+    const cur = hotkey.bindings[target] ?? { inApp: null, global: null };
+    await hotkey.updateBinding(target, { ...cur, inApp: null });
   },
 });
 
 /** 开始录入 */
-const startRecord = (id: HotkeyActionId, scope: Scope): void => {
-  if (scope === "global" && !hotkey.globalEnabled) return;
+const startRecord = (id: HotkeyActionId): void => {
   clearError();
-  if (
-    recordingTarget.value &&
-    recordingTarget.value.id === id &&
-    recordingTarget.value.scope === scope
-  ) {
+  if (recordingTarget.value === id) {
     recorder.cancel();
     return;
   }
   if (recordingTarget.value) recorder.cancel();
-  recordingTarget.value = { id, scope };
+  recordingTarget.value = id;
   recorder.start();
 };
 
@@ -150,62 +112,35 @@ const resetAll = async (): Promise<void> => {
   await hotkey.resetBinding();
 };
 
-/** 切换全局总开关 */
-const toggleGlobalEnabled = async (v: boolean): Promise<void> => {
-  await hotkey.setGlobalEnabled(v);
-};
-
 /** 获取值 */
-const valueOf = (id: HotkeyActionId, scope: Scope): string => {
-  const target = recordingTarget.value;
-  if (target && target.id === id && target.scope === scope) {
+const valueOf = (id: HotkeyActionId): string => {
+  if (recordingTarget.value === id) {
     return recorder.current.value;
   }
-  const accel = hotkey.bindings[id]?.[scope];
+  const accel = hotkey.bindings[id]?.inApp;
   if (!accel) return "";
   return formatAccelerator(accel, isMac);
 };
 
 /** 获取占位符 */
-const placeholderOf = (id: HotkeyActionId, scope: Scope): string => {
-  const target = recordingTarget.value;
-  if (target && target.id === id && target.scope === scope) {
+const placeholderOf = (id: HotkeyActionId): string => {
+  if (recordingTarget.value === id) {
     return t("settings.hotkeys.recording");
   }
   return t("settings.hotkeys.unbound");
 };
 
-/** 取主进程上报的 global 冲突项（os-occupied / duplicate / invalid 都算） */
-const findRuntimeGlobalConflict = (id: HotkeyActionId) =>
-  hotkey.conflicts.find((c) => c.id === id && c.scope === "global");
-
 /** 检查状态 */
-const statusOf = (id: HotkeyActionId, scope: Scope): "default" | "error" => {
-  if (errorFor.value && errorFor.value.id === id && errorFor.value.scope === scope) return "error";
-  if (scope === "global" && hotkey.globalEnabled && findRuntimeGlobalConflict(id)) return "error";
+const statusOf = (id: HotkeyActionId): "default" | "error" => {
+  if (errorFor.value && errorFor.value.id === id) return "error";
   return "default";
 };
 
-/** 把冲突 reason 翻成可读文案 */
-const conflictReasonText = (reason: "os-occupied" | "duplicate" | "invalid"): string => {
-  if (reason === "duplicate") return t("settings.hotkeys.osDuplicate");
-  if (reason === "invalid") return t("settings.hotkeys.invalid");
-  return t("settings.hotkeys.osOccupied");
-};
-
 /** 获取错误标题 */
-const errorTitleOf = (id: HotkeyActionId, scope: Scope): string => {
+const errorTitleOf = (id: HotkeyActionId): string => {
   const err = errorFor.value;
-  if (err && err.id === id && err.scope === scope) {
-    if (err.kind === "osOccupied") return t("settings.hotkeys.osOccupied");
-    if (err.kind === "crossScope") {
-      return t("settings.hotkeys.crossScopeWith", { action: labelOf(err.conflictWith!) });
-    }
-    return t("settings.hotkeys.duplicateWith", { action: labelOf(err.conflictWith!) });
-  }
-  if (scope === "global" && hotkey.globalEnabled) {
-    const runtime = findRuntimeGlobalConflict(id);
-    if (runtime) return conflictReasonText(runtime.reason);
+  if (err && err.id === id && err.conflictWith) {
+    return t("settings.hotkeys.duplicateWith", { action: labelOf(err.conflictWith) });
   }
   return "";
 };
@@ -213,18 +148,6 @@ const errorTitleOf = (id: HotkeyActionId, scope: Scope): string => {
 
 <template>
   <div class="flex flex-col gap-3">
-    <div
-      class="rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 flex items-center justify-between gap-4"
-    >
-      <div class="min-w-0 flex-1">
-        <div class="text-base">{{ t("settings.hotkeys.globalEnabled") }}</div>
-        <div class="text-sm text-on-surface-variant/70 mt-0.5">
-          {{ t("settings.hotkeys.globalEnabledHint") }}
-        </div>
-      </div>
-      <SSwitch :model-value="hotkey.globalEnabled" @update:model-value="toggleGlobalEnabled" />
-    </div>
-
     <!-- 绑定表：按类分组 -->
     <div
       v-for="group in groupedActions"
@@ -235,11 +158,8 @@ const errorTitleOf = (id: HotkeyActionId, scope: Scope): string => {
         <span class="flex-1 text-on-surface-variant/80">
           {{ t(`settings.hotkeys.groups.${group.category}`) }}
         </span>
-        <span class="w-48 text-center text-on-surface-variant/60">
-          {{ t("settings.hotkeys.colInApp") }}
-        </span>
-        <span class="w-48 text-center text-on-surface-variant/60">
-          {{ t("settings.hotkeys.colGlobal") }}
+        <span class="w-56 text-center text-on-surface-variant/60">
+          快捷键
         </span>
         <span class="w-9" />
       </div>
@@ -249,29 +169,16 @@ const errorTitleOf = (id: HotkeyActionId, scope: Scope): string => {
           <div class="px-4 py-2.5 flex items-center gap-3">
             <span class="flex-1 text-sm">{{ t(action.labelKey) }}</span>
 
-            <div class="w-48" :title="errorTitleOf(action.id, 'inApp')">
+            <div class="w-56" :title="errorTitleOf(action.id)">
               <SInput
                 readonly
-                :model-value="valueOf(action.id, 'inApp')"
-                :placeholder="placeholderOf(action.id, 'inApp')"
-                :status="statusOf(action.id, 'inApp')"
-                @click="startRecord(action.id, 'inApp')"
+                :model-value="valueOf(action.id)"
+                :placeholder="placeholderOf(action.id)"
+                :status="statusOf(action.id)"
+                @click="startRecord(action.id)"
                 @blur="stopRecord"
               />
             </div>
-
-            <div v-if="action.allowGlobal" class="w-48" :title="errorTitleOf(action.id, 'global')">
-              <SInput
-                readonly
-                :disabled="!hotkey.globalEnabled"
-                :model-value="valueOf(action.id, 'global')"
-                :placeholder="placeholderOf(action.id, 'global')"
-                :status="statusOf(action.id, 'global')"
-                @click="startRecord(action.id, 'global')"
-                @blur="stopRecord"
-              />
-            </div>
-            <div v-else class="w-48 text-center text-sm text-on-surface-variant/30">—</div>
 
             <SButton
               variant="ghost"
