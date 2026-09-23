@@ -15,6 +15,12 @@ interface Props {
   maxWidth?: number;
   /** 自定义绘制颜色 */
   color?: string;
+  /** 活跃时的不透明度 */
+  activeOpacity?: number;
+  /** 非活跃时的不透明度 */
+  inactiveOpacity?: number;
+  /** 是否置于底栏播放条背景 */
+  inPlayerBar?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,10 +28,50 @@ const props = withDefaults(defineProps<Props>(), {
   height: 80,
   radius: 2,
   maxWidth: 1920,
+  inPlayerBar: false,
 });
 
 const status = useStatusStore();
 const settings = useSettingsStore();
+
+/** 容器不透明度（底栏与全屏差异化配置，确保底栏半透明不遮挡文字） */
+const containerOpacity = computed(() => {
+  if (props.inPlayerBar) {
+    if (!props.show || !status.isPlaying) {
+      return props.inactiveOpacity ?? 0;
+    }
+    return props.activeOpacity ?? 0.25;
+  }
+  return props.show ? (props.activeOpacity ?? 0.65) : (props.inactiveOpacity ?? 0.15);
+});
+
+/** 获取当前封面主色（或主题主色）RGB */
+const getThemeCoverRgb = (): [number, number, number] => {
+  try {
+    const root = document.documentElement;
+    const raw = getComputedStyle(root).getPropertyValue("--s-cover").trim();
+    if (raw) {
+      const parts = raw.split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
+      if (parts.length >= 3) {
+        return [parts[0], parts[1], parts[2]];
+      }
+    }
+    const primary = getComputedStyle(root).getPropertyValue("--s-primary").trim();
+    if (primary) {
+      const parts = primary.split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
+      if (parts.length >= 3) {
+        return [parts[0], parts[1], parts[2]];
+      }
+    }
+  } catch {}
+  return [254, 121, 113];
+};
+
+/** 生成 RGBA 颜色字符串 */
+const getThemeCoverRgba = (alpha: number): string => {
+  const [r, g, b] = getThemeCoverRgb();
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -126,11 +172,25 @@ const draw = (): void => {
   if (numBars === 0) return;
 
   ctx.clearRect(0, 0, cssWidth, cssHeight);
-  const compColor = getComputedStyle(canvas).color;
-  ctx.fillStyle =
-    compColor && compColor !== "rgba(0, 0, 0, 0)" && compColor !== "transparent"
-      ? compColor
-      : "rgb(var(--s-cover, 254, 121, 113))";
+
+  if (props.inPlayerBar) {
+    // 底栏半透明氛围模式：创建垂直渐变遮罩，底部保持柔和主色，向上渐隐消散，确保前景文字完全清晰可读
+    const grad = ctx.createLinearGradient(0, cssHeight, 0, 0);
+    grad.addColorStop(0, getThemeCoverRgba(0.85));
+    grad.addColorStop(0.3, getThemeCoverRgba(0.45));
+    grad.addColorStop(0.65, getThemeCoverRgba(0.12));
+    grad.addColorStop(1, getThemeCoverRgba(0.0));
+    ctx.fillStyle = grad;
+  } else if (props.color) {
+    ctx.fillStyle = props.color;
+  } else {
+    // 全屏模式：若容器有 text-cover 则跟随，否则使用封面主色
+    const compColor = getComputedStyle(canvas).color;
+    ctx.fillStyle =
+      compColor && compColor !== "rgba(0, 0, 0, 0)" && compColor !== "transparent"
+        ? compColor
+        : getThemeCoverRgba(1);
+  }
 
   for (let i = 0; i < numBars; i++) {
     // 每个 bar 覆盖一段 bin，再扩 1 个邻居做空间平滑，避免相邻 bin 方差导致的悬崖
@@ -204,7 +264,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="absolute left-0 bottom-0 w-full flex justify-center z-0 pointer-events-none transition-opacity duration-300"
-    :style="{ opacity: show ? 0.65 : 0.15 }"
+    :style="{ opacity: containerOpacity }"
   >
     <canvas ref="canvasRef" class="spectrum-canvas" />
   </div>

@@ -52,9 +52,9 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   <div v-if="isFloating" class="relative flex items-center px-4 gap-4 min-w-0 overflow-hidden rounded-full">
     <BottomSpectrum
       v-if="settings.player.enableSpectrum"
+      in-player-bar
       :show="status.isPlaying"
       :height="56"
-      class="opacity-30 pointer-events-none"
     />
     <PlayerControls compact class="relative z-1" />
     <div class="flex flex-col flex-1 min-w-0 gap-1 pt-2 pb-1 relative z-1">
@@ -125,9 +125,9 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   <div v-else class="relative h-full overflow-hidden">
     <BottomSpectrum
       v-if="settings.player.enableSpectrum"
+      in-player-bar
       :show="status.isPlaying"
       :height="76"
-      class="opacity-25 pointer-events-none"
     />
     <div class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
       <SSlider
