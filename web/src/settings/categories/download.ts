@@ -1,5 +1,6 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import IconLucideDownload from "~icons/lucide/download";
+import DownloadDirConfig from "@/components/settings/custom/DownloadDirConfig.vue";
 
 const downloadCategory: SettingCategory = {
   id: "download",
@@ -14,6 +15,11 @@ const downloadCategory: SettingCategory = {
           binding: { store: "settings", path: "system.download.enabled" },
           defaultValue: false,
           hideDescription: true,
+        },
+        {
+          key: "downloadDir",
+          component: DownloadDirConfig,
+          keywords: ["downloadDir.label"],
         },
       ],
     },

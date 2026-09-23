@@ -45,40 +45,63 @@ export function findBrowserExecutable(): string | null {
   return null;
 }
 
+let currentBrowser: any = null;
+let currentFinishFn: ((result: Record<string, string> | null) => void) | null = null;
 let activeLoginPromise: Promise<Record<string, string> | null> | null = null;
+
+export async function cancelLoginWindow(): Promise<void> {
+  if (currentFinishFn) {
+    currentFinishFn(null);
+    currentFinishFn = null;
+  }
+  if (currentBrowser) {
+    try {
+      await currentBrowser.close().catch(() => {});
+    } catch {}
+    currentBrowser = null;
+  }
+  activeLoginPromise = null;
+}
 
 /**
  * 打开网易云官方网页登录窗口并自动捕获登录 Cookie
  * @returns 登录成功返回 cookies 对象；用户中途关闭窗口返回 null
  */
 export async function openNeteaseLoginWindow(): Promise<Record<string, string> | null> {
-  if (activeLoginPromise) return activeLoginPromise;
+  // 如果已有窗口在运行，先安全关闭并清理，确保每次点击都是全新的交互窗口
+  await cancelLoginWindow();
 
   const executablePath = findBrowserExecutable();
   if (!executablePath) {
-    throw new Error("未检测到本地 Chrome 或 Edge 浏览器，请先安装浏览器");
+    throw new Error("NO_LOCAL_BROWSER: 未检测到本地 Chrome 或 Edge 浏览器");
   }
 
   const tempUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "splayer-login-"));
 
   activeLoginPromise = (async () => {
-    let browser: any = null;
     let pollInterval: NodeJS.Timeout | null = null;
 
     try {
-      browser = await puppeteer.launch({
+      const browser = await puppeteer.launch({
         executablePath,
         headless: false,
         defaultViewport: null,
         userDataDir: tempUserDataDir,
+        ignoreDefaultArgs: ["--enable-automation"],
         args: [
           "--window-size=1024,720",
-          "--app=https://music.163.com/#/login",
+          "--no-sandbox",
           "--disable-blink-features=AutomationControlled",
           "--no-first-run",
           "--no-default-browser-check",
         ],
       });
+      currentBrowser = browser;
+
+      const pages = await browser.pages();
+      const page = pages.length > 0 ? pages[0] : await browser.newPage();
+      await page.goto("https://music.163.com/#/login", { waitUntil: "domcontentloaded" });
+      await page.bringToFront().catch(() => {});
 
       return await new Promise<Record<string, string> | null>((resolve) => {
         let settled = false;
@@ -86,6 +109,7 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
         const finish = async (result: Record<string, string> | null) => {
           if (settled) return;
           settled = true;
+          currentFinishFn = null;
           if (pollInterval) {
             clearInterval(pollInterval);
             pollInterval = null;
@@ -95,22 +119,27 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
               await browser.close().catch(() => {});
             }
           } catch {}
+          currentBrowser = null;
           try {
             fs.rmSync(tempUserDataDir, { recursive: true, force: true });
           } catch {}
           resolve(result);
         };
 
+        currentFinishFn = finish;
+
         browser.on("disconnected", () => {
+          finish(null);
+        });
+
+        page.on("close", () => {
           finish(null);
         });
 
         pollInterval = setInterval(async () => {
           try {
-            const pages = await browser.pages();
-            if (pages.length === 0) return;
-            const targetPage = pages[pages.length - 1];
-            const cookies = await targetPage.cookies("https://music.163.com");
+            if (!browser || !browser.connected) return;
+            const cookies = await page.cookies();
             const musicU = cookies.find((c: any) => c.name === "MUSIC_U");
             if (musicU?.value) {
               const result: Record<string, string> = {};
@@ -118,6 +147,7 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
                 const hit = cookies.find((c: any) => c.name === key);
                 if (hit?.value) result[key] = hit.value;
               }
+              result["MUSIC_U"] = musicU.value;
               await finish(result);
             }
           } catch (err) {
@@ -127,6 +157,8 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
       });
     } finally {
       activeLoginPromise = null;
+      currentBrowser = null;
+      currentFinishFn = null;
     }
   })();
 

@@ -1568,6 +1568,13 @@ const webApi = {
           if (data.ok) {
             return { ok: true };
           }
+          if (data.code === "NO_LOCAL_BROWSER") {
+            window.open("https://music.163.com/#/login", "_blank");
+            return {
+              ok: false,
+              error: "当前服务端环境无法调起本地窗口。已在新标签页为您打开网易云登录页，登录后复制 MUSIC_U，在「手动输入 Cookie」中粘贴即可登录",
+            };
+          }
           return { ok: false, error: data.error || "canceled" };
         }
         return { ok: false, error: `HTTP ${res.status}` };

@@ -9,9 +9,9 @@ import * as neteaseLyric from "./apis/common/lyric/netease.js";
 import * as qqmusicLyric from "./apis/common/lyric/qqmusic.js";
 import * as kugouLyric from "./apis/common/lyric/kugou.js";
 import { fetchTTML } from "./apis/common/lyric/ttml.js";
-import { resolveNeteaseEnhancedUrl } from "./apis/plugins/neteaseEnhanced.js";
+import { resolveNeteaseEnhancedUrl, getNeteaseEnhancedConfig } from "./apis/plugins/neteaseEnhanced.js";
 import { getCommentSources, getMusicComments } from "./services/comments/index.js";
-import { openNeteaseLoginWindow } from "./services/loginWindow.js";
+import { openNeteaseLoginWindow, cancelLoginWindow } from "./services/loginWindow.js";
 import { coreLog } from "./adapters/logger.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
@@ -283,24 +283,52 @@ export const handleApiRequest = async (
       // 4.1 网页登录自动获取 Cookie: POST /api/apis/openLoginWeb
       if (pathname === "/api/apis/openLoginWeb") {
         const platform = String(body.platform || "netease");
+        coreLog.info("[apis] openLoginWeb requested for platform:", platform);
         if (platform === "netease") {
+          let closed = false;
+          req.on("close", () => {
+            if (!res.writableEnded && !closed) {
+              closed = true;
+              void cancelLoginWindow();
+            }
+          });
           try {
             const cookies = await openNeteaseLoginWindow();
+            if (closed) return;
             if (!cookies) {
+              coreLog.info("[apis] openLoginWeb netease canceled by user or window closed");
               sendJson(res, 200, { ok: false, error: "canceled" });
               return;
             }
+            coreLog.info("[apis] openLoginWeb netease succeeded! Captured cookies:", Object.keys(cookies));
             sessionStore.cookies.netease = { ...(sessionStore.cookies.netease || {}), ...cookies };
             sessionStore.patch.netease = { ...sessionStore.cookies.netease };
             sendJson(res, 200, { ok: true, cookiePatch: sessionStore.patch });
             return;
           } catch (err: any) {
             coreLog.warn("[apis] openLoginWeb netease failed:", err);
-            sendJson(res, 200, { ok: false, error: err?.message || String(err) });
+            const isNoBrowser = String(err?.message || "").includes("NO_LOCAL_BROWSER");
+            sendJson(res, 200, {
+              ok: false,
+              code: isNoBrowser ? "NO_LOCAL_BROWSER" : "LAUNCH_FAILED",
+              error: isNoBrowser
+                ? "当前运行环境无法调起本地浏览器窗口（如处于 Docker 容器或无桌面系统）。请直接使用界面中的「扫码登录」或「手动输入 Cookie」。"
+                : err?.message || String(err),
+            });
             return;
           }
         }
         sendJson(res, 200, { ok: false, error: "unsupported platform" });
+        return;
+      }
+
+      // 4.2 插件与环境配置查询: GET /api/plugins/config
+      if (pathname === "/api/plugins/config") {
+        const neteaseEnhanced = getNeteaseEnhancedConfig();
+        sendJson(res, 200, {
+          ok: true,
+          neteaseEnhanced,
+        });
         return;
       }
 

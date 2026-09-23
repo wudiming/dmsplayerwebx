@@ -45,6 +45,31 @@ class WebPluginManager {
 
   constructor() {
     this.loadFromStorage();
+    void this.syncServerConfig();
+  }
+
+  public async syncServerConfig(): Promise<void> {
+    try {
+      const res = await fetch("/api/plugins/config");
+      if (res.ok) {
+        const data = await res.json();
+        const npi = this.plugins.find((p) => p.manifest.id === DEFAULT_NETEASE_ENHANCED_PLUGIN.manifest.id);
+        if (data?.neteaseEnhanced && npi) {
+          const { enabled, baseUrl } = data.neteaseEnhanced;
+          npi.enabled = Boolean(enabled);
+          if (!enabled) {
+            npi.status = { state: "disabled" };
+          } else {
+            npi.status = { ...DEFAULT_NETEASE_ENHANCED_PLUGIN.status, state: "ready" };
+            if (baseUrl) {
+              npi.manifest.homepage = baseUrl;
+            }
+          }
+          this.saveToStorage();
+          this.emitStatus(npi);
+        }
+      }
+    } catch {}
   }
 
   private loadFromStorage() {
@@ -164,11 +189,16 @@ class WebPluginManager {
       console.warn("[WebPluginManager] resolveUrl fetch failed:", err);
     }
 
-    // 兜底直接请求增强版接口
+    // 兜底直接请求增强版接口 (仅当插件启用时)
+    if (!plugin?.enabled) {
+      return { ok: false, error: "网易云增强版音源插件未启用" };
+    }
+
     try {
       const songId = String(params.musicInfo.id || params.musicInfo.songmid || params.musicInfo.songId || "").trim();
       if (!songId) return { ok: false, error: "缺少歌曲 ID" };
-      const directRes = await fetch(`https://npi.881128.xyz/song/url/match?id=${songId}`);
+      const baseUrl = plugin?.manifest?.homepage || "https://npi.881128.xyz";
+      const directRes = await fetch(`${baseUrl}/song/url/match?id=${songId}`);
       if (directRes.ok) {
         const directData = await directRes.json();
         if (typeof directData.data === "string" && directData.data) {

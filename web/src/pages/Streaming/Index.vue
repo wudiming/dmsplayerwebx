@@ -332,19 +332,6 @@ const handleDeleteServer = async (id: string): Promise<void> => {
 
         <!-- 顶栏操作区 -->
         <div class="flex items-center gap-2 shrink-0">
-          <!-- 添加媒体源直接入口 -->
-          <SButton
-            variant="secondary"
-            round
-            class="gap-1.5 font-medium"
-            @click="openAddServer"
-          >
-            <template #icon>
-              <IconLucidePlus class="size-4 text-primary" />
-            </template>
-            添加媒体源
-          </SButton>
-
           <!-- 服务器切换选择器 -->
           <div v-if="servers.length > 0" class="w-44">
             <SSelect

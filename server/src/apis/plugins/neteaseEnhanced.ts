@@ -25,7 +25,46 @@ export interface PluginResolveResult {
   error?: string;
 }
 
-const BASE_URL = "https://npi.881128.xyz";
+import fs from "node:fs";
+import path from "node:path";
+
+function loadEnvFile(): void {
+  try {
+    const candidates = [
+      path.resolve(process.cwd(), ".env"),
+      path.resolve(process.cwd(), "../.env"),
+      path.resolve(process.cwd(), "server/.env"),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, "utf-8");
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith("#")) continue;
+          const eqIdx = trimmed.indexOf("=");
+          if (eqIdx > 0) {
+            const k = trimmed.slice(0, eqIdx).trim();
+            const v = trimmed.slice(eqIdx + 1).trim();
+            if (!process.env[k]) {
+              process.env[k] = v;
+            }
+          }
+        }
+        break;
+      }
+    }
+  } catch {}
+}
+loadEnvFile();
+
+export function getNeteaseEnhancedConfig(): { enabled: boolean; baseUrl: string } {
+  const envUrl = (process.env.NETEASE_ENHANCED_URL || process.env.NETEASE_API_ENHANCED || "").trim();
+  if (!envUrl) {
+    return { enabled: false, baseUrl: "" };
+  }
+  return { enabled: true, baseUrl: envUrl.replace(/\/+$/, "") };
+}
+
 const REQUEST_TIMEOUT = 15000;
 
 const FALLBACK_CHAIN: Record<string, string[]> = {
@@ -76,6 +115,10 @@ function isTrialItem(item: any): boolean {
 }
 
 async function getJson(path: string, params: Record<string, any> = {}): Promise<any> {
+  const cfg = getNeteaseEnhancedConfig();
+  if (!cfg.enabled) {
+    throw new Error("NETEASE_ENHANCED_URL not configured");
+  }
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && String(v) !== "") {
@@ -83,7 +126,7 @@ async function getJson(path: string, params: Record<string, any> = {}): Promise<
     }
   }
   const qStr = qs.toString();
-  const url = `${BASE_URL}${path}${qStr ? `?${qStr}` : ""}`;
+  const url = `${cfg.baseUrl}${path}${qStr ? `?${qStr}` : ""}`;
 
   const res = await fetch(url, {
     headers: {
@@ -137,6 +180,10 @@ async function shouldUseOfficial(): Promise<boolean> {
 export const resolveNeteaseEnhancedUrl = async (
   params: PluginResolveParams,
 ): Promise<PluginResolveResult> => {
+  const cfg = getNeteaseEnhancedConfig();
+  if (!cfg.enabled) {
+    return { ok: false, error: "未配置 NETEASE_ENHANCED_URL 环境变量，网易云增强版音源插件未开启" };
+  }
   const { musicInfo, quality = "hq" } = params;
   const id = pickSongId(musicInfo);
   if (!id) {
