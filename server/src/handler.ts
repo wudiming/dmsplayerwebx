@@ -12,8 +12,6 @@ import { fetchTTML } from "./apis/common/lyric/ttml.js";
 import { resolveNeteaseEnhancedUrl, getNeteaseEnhancedConfig } from "./apis/plugins/neteaseEnhanced.js";
 import { getCommentSources, getMusicComments } from "./services/comments/index.js";
 import fs from "node:fs";
-import path from "node:path";
-import { openNeteaseLoginWindow, cancelLoginWindow } from "./services/loginWindow.js";
 import { coreLog } from "./adapters/logger.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
@@ -282,52 +280,7 @@ export const handleApiRequest = async (
         return;
       }
 
-      // 4.1 网页登录自动获取 Cookie: POST /api/apis/openLoginWeb
-      if (pathname === "/api/apis/openLoginWeb") {
-        const platform = String(body.platform || "netease");
-        coreLog.info("[apis] openLoginWeb requested for platform:", platform);
-        if (platform === "netease") {
-          req.socket?.setTimeout(0);
-          res.setTimeout?.(0);
-          // 仅在响应连接非正常关闭时清理窗口，绝不可在 req.on('close') 中清理
-          res.on("close", () => {
-            if (!res.writableEnded) {
-              coreLog.info("[apis] HTTP client closed connection before login completed");
-              void cancelLoginWindow();
-            }
-          });
 
-          try {
-            const cookies = await openNeteaseLoginWindow();
-            if (res.writableEnded) return;
-
-            if (!cookies) {
-              coreLog.info("[apis] openLoginWeb netease canceled by user or window closed");
-              sendJson(res, 200, { ok: false, error: "canceled" });
-              return;
-            }
-
-            coreLog.info("[apis] openLoginWeb netease succeeded! Captured cookies:", Object.keys(cookies));
-            sessionStore.cookies.netease = { ...(sessionStore.cookies.netease || {}), ...cookies };
-            sessionStore.patch.netease = { ...sessionStore.cookies.netease };
-            sendJson(res, 200, { ok: true, cookiePatch: sessionStore.patch });
-            return;
-          } catch (err: any) {
-            coreLog.warn("[apis] openLoginWeb netease failed:", err);
-            const isNoBrowser = String(err?.message || "").includes("NO_LOCAL_BROWSER");
-            sendJson(res, 200, {
-              ok: false,
-              code: isNoBrowser ? "NO_LOCAL_BROWSER" : "LAUNCH_FAILED",
-              error: isNoBrowser
-                ? "当前系统未检测到 Chrome 或 Edge 浏览器，请使用扫码登录。"
-                : err?.message || String(err),
-            });
-            return;
-          }
-        }
-        sendJson(res, 200, { ok: false, error: "unsupported platform" });
-        return;
-      }
 
       // 4.2 插件与环境配置查询: GET /api/plugins/config
       if (pathname === "/api/plugins/config") {

@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
-import { dialog } from "@/composables/useDialog";
 import { neteaseQrLoginAdapter } from "@/apis/login/netease";
 import QrLoginPanel from "@/components/modals/QrLoginPanel.vue";
 import LoginCookieDialog from "@/components/modals/LoginCookieDialog.vue";
 import SLogo from "@/components/ui/SLogo.vue";
 import SDialog from "@/components/ui/SDialog.vue";
 import SButton from "@/components/ui/SButton.vue";
-import IconLucideScanLine from "~icons/lucide/scan-line";
 import IconLucideKeyRound from "~icons/lucide/key-round";
 import IconLucideX from "~icons/lucide/x";
 
@@ -41,36 +39,6 @@ const handleQrSuccess = async (): Promise<void> => {
   }
 };
 
-const startAutoFetch = async (): Promise<void> => {
-  if (loading.value) return;
-
-  const ok = await dialog.confirm({
-    title: t("login.autoFetchTitle"),
-    content: t("login.autoFetchTip"),
-    confirmText: t("login.autoFetchConfirm"),
-    type: "warning",
-  });
-  if (!ok) return;
-
-  loading.value = true;
-  panelRef.value?.pause();
-  try {
-    const result = await window.api.apis.openLoginWeb("netease");
-    if (!result.ok) {
-      if (result.error !== "canceled") {
-        toast.error(result.message || t("login.failed"));
-      }
-      panelRef.value?.resume();
-      return;
-    }
-    if (!(await finishLogin())) {
-      void panelRef.value?.refresh();
-    }
-  } finally {
-    loading.value = false;
-  }
-};
-
 const openManualCookie = (): void => {
   panelRef.value?.pause();
   cookieDialogOpen.value = true;
@@ -96,12 +64,7 @@ const onCookieDialogOpen = (open: boolean): void => {
         :adapter="adapter"
         @success="handleQrSuccess"
       />
-      <div class="flex items-center gap-2 pt-1">
-        <SButton variant="ghost" size="small" :disabled="loading" @click="startAutoFetch">
-          <template #icon><IconLucideScanLine /></template>
-          {{ t("login.autoFetch") }}
-        </SButton>
-        <div class="h-3 w-px bg-outline-variant/40" />
+      <div class="flex items-center justify-center pt-1">
         <SButton variant="ghost" size="small" :disabled="loading" @click="openManualCookie">
           <template #icon><IconLucideKeyRound /></template>
           {{ t("login.manualCookie") }}

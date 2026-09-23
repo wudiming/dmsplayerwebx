@@ -1588,32 +1588,8 @@ const webApi = {
       }
     },
 
-    openLoginWeb: async (platform: string = "netease") => {
-      try {
-        const cookies = getClientSessions();
-        const res = await fetch("/api/apis/openLoginWeb", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-splayer-cookies": encodeURIComponent(JSON.stringify(cookies)),
-          },
-          body: JSON.stringify({ platform, cookies }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.cookiePatch) {
-            updateClientSessionCookies(data.cookiePatch);
-          }
-          if (data.ok) {
-            return { ok: true };
-          }
-          return { ok: false, error: data.error || "canceled", message: data.error };
-        }
-        return { ok: false, error: `HTTP ${res.status}` };
-      } catch (err: any) {
-        console.warn(`[web-bridge] openLoginWeb ${platform} error:`, err);
-        return { ok: false, error: err?.message || "canceled" };
-      }
+    openLoginWeb: async (_platform: string = "netease") => {
+      return { ok: false, error: "not_supported" };
     },
 
     setCookie: async (platform: string, raw: string) => {
