@@ -1589,55 +1589,31 @@ const webApi = {
     },
 
     openLoginWeb: async (platform: string = "netease") => {
-      // 1. 优先尝试从本地/服务器检测现有有效凭证（如根目录 music_U.txt 或环境变量）
       try {
-        const detectRes = await (webApi.apis as any).detectLocalCookie(platform);
-        if (detectRes?.ok) {
-          return { ok: true };
+        const cookies = getClientSessions();
+        const res = await fetch("/api/apis/openLoginWeb", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-splayer-cookies": encodeURIComponent(JSON.stringify(cookies)),
+          },
+          body: JSON.stringify({ platform, cookies }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.cookiePatch) {
+            updateClientSessionCookies(data.cookiePatch);
+          }
+          if (data.ok) {
+            return { ok: true };
+          }
+          return { ok: false, error: data.error || "canceled", message: data.error };
         }
-      } catch {}
-
-      // 2. 检查当前浏览器内核是否为 Chromium
-      const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
-      const isChromeOrEdge = /Chrome|Edg|Chromium|CriOS/i.test(ua) && !/Firefox|FxiOS|Safari(?=.*Version)/i.test(ua);
-      const hasChromeProp = typeof window !== "undefined" && Boolean((window as any).chrome);
-      const hasBrands =
-        typeof navigator !== "undefined" &&
-        Boolean(
-          (navigator as any).userAgentData?.brands?.some((b: any) =>
-            /Chromium|Google Chrome|Microsoft Edge/i.test(b.brand),
-          ),
-        );
-      const isChromium = isChromeOrEdge || hasChromeProp || hasBrands;
-
-      if (!isChromium) {
-        return {
-          ok: false,
-          error: "not_chromium",
-          message: "当前浏览器非 Chrome / Edge 等 Chromium 内核，无法使用小窗自动获取。请使用「扫码登录」或「手动输入 Cookie」。",
-        };
+        return { ok: false, error: `HTTP ${res.status}` };
+      } catch (err: any) {
+        console.warn(`[web-bridge] openLoginWeb ${platform} error:`, err);
+        return { ok: false, error: err?.message || "canceled" };
       }
-
-      // 3. 在客户端直接唤起独立小窗
-      const width = 1000;
-      const height = 680;
-      const left = Math.max(0, Math.round(((window.screen?.width || 1280) - width) / 2));
-      const top = Math.max(0, Math.round(((window.screen?.height || 800) - height) / 2));
-      const features = `width=${width},height=${height},left=${left},top=${top},popup=yes,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`;
-      const loginWin = window.open("https://music.163.com/#/login", "netease_login_window", features);
-
-      if (!loginWin) {
-        return {
-          ok: false,
-          error: "popup_blocked",
-          message: "浏览器拦截了弹出窗口，请在地址栏右侧允许弹出窗口后重试。",
-        };
-      }
-      try {
-        loginWin.focus();
-      } catch {}
-
-      return { ok: true, opened: true };
     },
 
     setCookie: async (platform: string, raw: string) => {

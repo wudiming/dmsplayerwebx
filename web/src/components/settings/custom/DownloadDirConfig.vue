@@ -64,7 +64,7 @@ onMounted(loadDir);
             当前设备指定文件夹：<span class="font-medium text-primary">{{ customDirName }}</span>
           </span>
           <span v-else>
-            当前设备系统默认下载目录（跟随当前访问终端的浏览器原生下载路径）
+            当前设备系统默认下载目录
           </span>
         </div>
       </div>

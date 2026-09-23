@@ -5,7 +5,6 @@ import { dialog } from "@/composables/useDialog";
 import { neteaseQrLoginAdapter } from "@/apis/login/netease";
 import QrLoginPanel from "@/components/modals/QrLoginPanel.vue";
 import LoginCookieDialog from "@/components/modals/LoginCookieDialog.vue";
-import LoginWebAssistDialog from "@/components/modals/LoginWebAssistDialog.vue";
 import SLogo from "@/components/ui/SLogo.vue";
 import SDialog from "@/components/ui/SDialog.vue";
 import SButton from "@/components/ui/SButton.vue";
@@ -21,7 +20,6 @@ const adapter = neteaseQrLoginAdapter;
 const panelRef = useTemplateRef("panelRef");
 const loading = ref(false);
 const cookieDialogOpen = ref(false);
-const webAssistOpen = ref(false);
 
 const finishLogin = async (): Promise<boolean> => {
   const ok = await user.fetchStatus();
@@ -46,14 +44,6 @@ const handleQrSuccess = async (): Promise<void> => {
 const startAutoFetch = async (): Promise<void> => {
   if (loading.value) return;
 
-  // 1. 识别启动的浏览器是否为 Chromium 内核 (Chrome / Edge / Opera 等)
-  const isChromium = (window.api.apis as any).isChromium?.() ?? true;
-  if (!isChromium) {
-    toast.warning("当前浏览器非 Chrome / Edge 等 Chromium 内核，无法使用小窗自动获取。请使用「扫码登录」或「手动输入 Cookie」。");
-    return;
-  }
-
-  // 2. 使用前告知与确认
   const ok = await dialog.confirm({
     title: t("login.autoFetchTitle"),
     content: t("login.autoFetchTip"),
@@ -65,28 +55,17 @@ const startAutoFetch = async (): Promise<void> => {
   loading.value = true;
   panelRef.value?.pause();
   try {
-    // 3. 优先检测本地或现有凭证（如根目录下已有凭证）
-    const detect = await (window.api.apis as any).detectLocalCookie?.("netease");
-    if (detect?.ok) {
-      if (await finishLogin()) return;
-    }
-
-    // 4. 打开官方登录网页小窗
     const result = await window.api.apis.openLoginWeb("netease");
     if (!result.ok) {
-      if (result.error === "not_chromium") {
-        toast.warning(result.message || "当前浏览器非 Chromium 内核，请使用扫码登录");
-      } else if (result.error === "popup_blocked") {
-        toast.warning(result.message || "浏览器拦截了弹出小窗，请允许弹窗后重试");
-      } else if (result.error !== "canceled") {
-        toast.error(t("login.failed"));
+      if (result.error !== "canceled") {
+        toast.error(result.message || t("login.failed"));
       }
       panelRef.value?.resume();
       return;
     }
-
-    // 小窗唤起成功，打开网页登录助手弹窗
-    webAssistOpen.value = true;
+    if (!(await finishLogin())) {
+      void panelRef.value?.refresh();
+    }
   } finally {
     loading.value = false;
   }
@@ -100,16 +79,6 @@ const openManualCookie = (): void => {
 const onCookieDialogOpen = (open: boolean): void => {
   cookieDialogOpen.value = open;
   if (!open && props.open) panelRef.value?.resume();
-};
-
-const onWebAssistOpen = (open: boolean): void => {
-  webAssistOpen.value = open;
-  if (!open && props.open) panelRef.value?.resume();
-};
-
-const onWebAssistSuccess = async (): Promise<void> => {
-  webAssistOpen.value = false;
-  await finishLogin();
 };
 </script>
 
@@ -150,10 +119,5 @@ const onWebAssistSuccess = async (): Promise<void> => {
     :open="cookieDialogOpen"
     @update:open="onCookieDialogOpen"
     @success="emit('update:open', false)"
-  />
-  <LoginWebAssistDialog
-    :open="webAssistOpen"
-    @update:open="onWebAssistOpen"
-    @success="onWebAssistSuccess"
   />
 </template>

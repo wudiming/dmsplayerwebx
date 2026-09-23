@@ -160,7 +160,6 @@ declare module 'vue' {
     LocalLyricRepoConfig: typeof import('./src/components/settings/custom/LocalLyricRepoConfig.vue')['default']
     LoginCookieDialog: typeof import('./src/components/modals/LoginCookieDialog.vue')['default']
     LoginDialog: typeof import('./src/components/modals/LoginDialog.vue')['default']
-    LoginWebAssistDialog: typeof import('./src/components/modals/LoginWebAssistDialog.vue')['default']
     LyricActions: typeof import('./src/components/player/FullPlayer/LyricActions.vue')['default']
     LyricCredit: typeof import('./src/components/player/Lyrics/LyricCredit.vue')['default']
     LyricFormatOrderConfig: typeof import('./src/components/settings/custom/LyricFormatOrderConfig.vue')['default']
