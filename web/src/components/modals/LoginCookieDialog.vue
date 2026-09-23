@@ -27,10 +27,18 @@ watch(
 );
 
 const submit = async (): Promise<void> => {
-  const value = raw.value.trim();
-  if (!value || !/MUSIC_U\s*=/i.test(value)) {
+  let value = raw.value.trim();
+  if (!value) {
     toast.error(t("login.cookieInvalid"));
     return;
+  }
+  if (!/MUSIC_U\s*=/i.test(value)) {
+    if (/^[a-fA-F0-9]{32,}/.test(value)) {
+      value = `MUSIC_U=${value}`;
+    } else {
+      toast.error(t("login.cookieInvalid"));
+      return;
+    }
   }
   loading.value = true;
   try {

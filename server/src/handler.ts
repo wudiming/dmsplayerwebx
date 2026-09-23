@@ -11,7 +11,8 @@ import * as kugouLyric from "./apis/common/lyric/kugou.js";
 import { fetchTTML } from "./apis/common/lyric/ttml.js";
 import { resolveNeteaseEnhancedUrl, getNeteaseEnhancedConfig } from "./apis/plugins/neteaseEnhanced.js";
 import { getCommentSources, getMusicComments } from "./services/comments/index.js";
-import { openNeteaseLoginWindow, cancelLoginWindow } from "./services/loginWindow.js";
+import fs from "node:fs";
+import path from "node:path";
 import { coreLog } from "./adapters/logger.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
@@ -280,43 +281,61 @@ export const handleApiRequest = async (
         return;
       }
 
-      // 4.1 网页登录自动获取 Cookie: POST /api/apis/openLoginWeb
-      if (pathname === "/api/apis/openLoginWeb") {
+      // 4.1 本地已存凭证检测 / 网页登录辅助: POST /api/apis/detectLocalCookie 或 POST /api/apis/openLoginWeb
+      if (pathname === "/api/apis/detectLocalCookie" || pathname === "/api/apis/openLoginWeb") {
         const platform = String(body.platform || "netease");
-        coreLog.info("[apis] openLoginWeb requested for platform:", platform);
+        coreLog.info("[apis] Checking credentials for platform:", platform);
         if (platform === "netease") {
-          let closed = false;
-          req.on("close", () => {
-            if (!res.writableEnded && !closed) {
-              closed = true;
-              void cancelLoginWindow();
+          // 优先检测环境变量、本地 music_U.txt
+          let found: Record<string, string> | null = null;
+          if (process.env.MUSIC_U) {
+            found = { MUSIC_U: process.env.MUSIC_U.trim() };
+          } else if (process.env.NETEASE_COOKIE) {
+            const parsed = cookieToJson(process.env.NETEASE_COOKIE);
+            if (parsed.MUSIC_U) found = parsed;
+          }
+
+          if (!found) {
+            const candidates = [
+              path.resolve(process.cwd(), "music_U.txt"),
+              path.resolve(process.cwd(), "..", "music_U.txt"),
+              path.resolve(process.cwd(), "music_u.txt"),
+              path.resolve(process.cwd(), "..", "music_u.txt"),
+            ];
+            for (const f of candidates) {
+              try {
+                if (fs.existsSync(f)) {
+                  const content = fs.readFileSync(f, "utf-8").trim();
+                  const parsed = cookieToJson(content);
+                  if (parsed.MUSIC_U) {
+                    found = parsed;
+                    break;
+                  }
+                  const match = content.match(/MUSIC_U=([^;\r\n]+)/i) || content.match(/([a-fA-F0-9]{32,})/);
+                  if (match) {
+                    found = { MUSIC_U: match[1] };
+                    break;
+                  }
+                }
+              } catch {}
             }
-          });
-          try {
-            const cookies = await openNeteaseLoginWindow();
-            if (closed) return;
-            if (!cookies) {
-              coreLog.info("[apis] openLoginWeb netease canceled by user or window closed");
-              sendJson(res, 200, { ok: false, error: "canceled" });
-              return;
-            }
-            coreLog.info("[apis] openLoginWeb netease succeeded! Captured cookies:", Object.keys(cookies));
-            sessionStore.cookies.netease = { ...(sessionStore.cookies.netease || {}), ...cookies };
+          }
+
+          if (found && found.MUSIC_U) {
+            coreLog.info("[apis] Successfully loaded local NetEase credentials!");
+            sessionStore.cookies.netease = { ...(sessionStore.cookies.netease || {}), ...found };
             sessionStore.patch.netease = { ...sessionStore.cookies.netease };
             sendJson(res, 200, { ok: true, cookiePatch: sessionStore.patch });
             return;
-          } catch (err: any) {
-            coreLog.warn("[apis] openLoginWeb netease failed:", err);
-            const isNoBrowser = String(err?.message || "").includes("NO_LOCAL_BROWSER");
-            sendJson(res, 200, {
-              ok: false,
-              code: isNoBrowser ? "NO_LOCAL_BROWSER" : "LAUNCH_FAILED",
-              error: isNoBrowser
-                ? "当前运行环境无法调起本地浏览器窗口（如处于 Docker 容器或无桌面系统）。请直接使用界面中的「扫码登录」或「手动输入 Cookie」。"
-                : err?.message || String(err),
-            });
-            return;
           }
+
+          // 未找到预存凭证时，通知前端调起客户端网页小窗并辅助捕获
+          sendJson(res, 200, {
+            ok: false,
+            code: "USE_CLIENT_WINDOW",
+            message: "未检测到本地现成凭证，已调度客户端小窗进行登录引导。",
+          });
+          return;
         }
         sendJson(res, 200, { ok: false, error: "unsupported platform" });
         return;

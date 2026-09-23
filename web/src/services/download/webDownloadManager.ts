@@ -5,6 +5,7 @@ import type {
   DownloadStatus,
 } from "@shared/types/download";
 import { resolveDownloadSource } from "@/services/download/source";
+import { getStoredDownloadDirHandle } from "./downloadDirStorage";
 
 const STORAGE_KEY = "splayer_web_download_tasks";
 
@@ -182,16 +183,33 @@ class WebDownloadManager {
 
           const mimeType = ext === "flac" ? "audio/flac" : "audio/mpeg";
           const blob = new Blob(chunks as BlobPart[], { type: mimeType });
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = blobUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-          }, 1000);
+
+          let savedToCustomHandle = false;
+          try {
+            const dirHandle = await getStoredDownloadDirHandle();
+            if (dirHandle) {
+              const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+              const writable = await fileHandle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+              savedToCustomHandle = true;
+            }
+          } catch (customErr) {
+            console.warn("[WebDownloadManager] Write to custom dir failed, falling back to browser download:", customErr);
+          }
+
+          if (!savedToCustomHandle) {
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(blobUrl);
+            }, 1000);
+          }
           downloadedViaBlob = true;
         }
       } catch (err) {
@@ -207,16 +225,32 @@ class WebDownloadManager {
             const lyricContent = lyricRes.data.lyric;
             const lyricExt = lyricFormat === "enhanced-lrc" ? "elrc" : "lrc";
             const lyricBlob = new Blob([lyricContent], { type: "text/plain;charset=utf-8" });
-            const lyricBlobUrl = URL.createObjectURL(lyricBlob);
-            const lrcA = document.createElement("a");
-            lrcA.href = lyricBlobUrl;
-            lrcA.download = `${baseName}.${lyricExt}`;
-            document.body.appendChild(lrcA);
-            lrcA.click();
-            setTimeout(() => {
-              document.body.removeChild(lrcA);
-              URL.revokeObjectURL(lyricBlobUrl);
-            }, 1000);
+            const lyricFilename = `${baseName}.${lyricExt}`;
+
+            let lyricSavedToCustom = false;
+            try {
+              const dirHandle = await getStoredDownloadDirHandle();
+              if (dirHandle) {
+                const fileHandle = await dirHandle.getFileHandle(lyricFilename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(lyricBlob);
+                await writable.close();
+                lyricSavedToCustom = true;
+              }
+            } catch {}
+
+            if (!lyricSavedToCustom) {
+              const lyricBlobUrl = URL.createObjectURL(lyricBlob);
+              const lrcA = document.createElement("a");
+              lrcA.href = lyricBlobUrl;
+              lrcA.download = lyricFilename;
+              document.body.appendChild(lrcA);
+              lrcA.click();
+              setTimeout(() => {
+                document.body.removeChild(lrcA);
+                URL.revokeObjectURL(lyricBlobUrl);
+              }, 1000);
+            }
           }
         } catch (lrcErr) {
           console.warn("[WebDownloadManager] Download lyric failed:", lrcErr);

@@ -18,6 +18,8 @@ const loadDir = () => {
   } catch {}
 };
 
+import { setStoredDownloadDirHandle } from "@/services/download/downloadDirStorage";
+
 const pickCustomDir = async () => {
   if (!supportsPicker) {
     toast.info("当前浏览器环境由系统原生下载器接管保存至本地系统");
@@ -27,7 +29,7 @@ const pickCustomDir = async () => {
     const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
     if (handle?.name) {
       customDirName.value = handle.name;
-      localStorage.setItem("splayer_web_custom_download_dir_name", handle.name);
+      await setStoredDownloadDirHandle(handle);
       toast.success(`已设置下载目录为当前设备上的 [${handle.name}] 文件夹`);
     }
   } catch (err: any) {
@@ -37,11 +39,9 @@ const pickCustomDir = async () => {
   }
 };
 
-const resetToDefault = () => {
+const resetToDefault = async () => {
   customDirName.value = "";
-  try {
-    localStorage.removeItem("splayer_web_custom_download_dir_name");
-  } catch {}
+  await setStoredDownloadDirHandle(null);
   toast.success("已恢复为当前系统默认下载目录");
 };
 
