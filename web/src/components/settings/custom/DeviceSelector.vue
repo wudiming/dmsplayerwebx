@@ -15,13 +15,20 @@ const SYSTEM_DEFAULT = "system-default";
 const current = computed(() => settings.player.outputDevice ?? SYSTEM_DEFAULT);
 
 const options = computed(() => {
-  const defaultName = status.outputDevices.find((device) => device.isDefault)?.name;
-  const defaultLabel = defaultName
-    ? `${t("settings.outputDevice.default")}（${defaultName}）`
-    : t("settings.outputDevice.default");
+  const defaultDevice = status.outputDevices.find(
+    (device) => device.isDefault || device.id === "default",
+  );
+  const defaultName = defaultDevice?.name;
+  const defaultLabel =
+    defaultName && defaultName !== "系统默认音频输出"
+      ? `${t("settings.outputDevice.default")}（${defaultName}）`
+      : t("settings.outputDevice.default");
+  const nonDefaultDevices = status.outputDevices.filter(
+    (device) => !device.isDefault && device.id !== "default",
+  );
   return [
     { value: SYSTEM_DEFAULT, label: defaultLabel },
-    ...status.outputDevices.map((device) => ({ value: device.id, label: device.name })),
+    ...nonDefaultDevices.map((device) => ({ value: device.id, label: device.name })),
   ];
 });
 

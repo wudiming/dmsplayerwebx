@@ -56,7 +56,8 @@ const resizeCanvas = (): void => {
   const canvas = canvasRef.value;
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const cssWidth = Math.min(document.body.clientWidth, props.maxWidth);
+  const parentWidth = canvas.parentElement?.clientWidth || document.body.clientWidth;
+  const cssWidth = Math.min(parentWidth, props.maxWidth);
   canvas.style.width = `${cssWidth}px`;
   canvas.style.height = `${props.height}px`;
   canvas.width = Math.round(cssWidth * dpr);

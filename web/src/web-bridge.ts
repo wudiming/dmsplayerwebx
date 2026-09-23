@@ -1166,7 +1166,10 @@ const webApi = {
       };
     },
     getDefaultDeviceName: async () => ({ success: true, data: "系统默认音频输出" }),
-    setOutputDevice: async (deviceId: string | null, _pauseBeforeSwitch?: boolean) => {
+    setOutputDevice: async (deviceId: string | null, pauseBeforeSwitch?: boolean) => {
+      if (pauseBeforeSwitch) {
+        playerEngine.pause();
+      }
       await playerEngine.setOutputDevice(deviceId || "");
       return { success: true };
     },

@@ -8,6 +8,7 @@ import { useTrackMenu } from "@/composables/useTrackMenu";
 import { useDownload } from "@/composables/useDownload";
 import { useProgressLyric } from "@/composables/useProgressLyric";
 import * as player from "@/core/player";
+import BottomSpectrum from "./FullPlayer/BottomSpectrum.vue";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
@@ -48,9 +49,15 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
 
 <template>
   <!-- 浮动模式 -->
-  <div v-if="isFloating" class="relative flex items-center px-4 gap-4 min-w-0">
-    <PlayerControls compact />
-    <div class="flex flex-col flex-1 min-w-0 gap-1 pt-2 pb-1">
+  <div v-if="isFloating" class="relative flex items-center px-4 gap-4 min-w-0 overflow-hidden rounded-full">
+    <BottomSpectrum
+      v-if="settings.player.enableSpectrum"
+      :show="status.isPlaying"
+      :height="56"
+      class="opacity-30 pointer-events-none"
+    />
+    <PlayerControls compact class="relative z-1" />
+    <div class="flex flex-col flex-1 min-w-0 gap-1 pt-2 pb-1 relative z-1">
       <div class="flex items-center gap-2 min-w-0">
         <TrackInfo compact class="flex-1">
           <template #title-trailing>
@@ -110,12 +117,18 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <div class="shrink-0">
+    <div class="shrink-0 relative z-1">
       <Toolbar />
     </div>
   </div>
   <!-- 默认模式 -->
-  <div v-else class="relative h-full">
+  <div v-else class="relative h-full overflow-hidden">
+    <BottomSpectrum
+      v-if="settings.player.enableSpectrum"
+      :show="status.isPlaying"
+      :height="76"
+      class="opacity-25 pointer-events-none"
+    />
     <div class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
       <SSlider
         :model-value="position"
@@ -131,7 +144,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <div class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
+    <div class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3 relative z-1">
       <TrackInfo>
         <template #title-trailing>
           <div class="flex items-center shrink-0">
