@@ -18,6 +18,8 @@ import {
   setCachedTTML,
 } from "../../../adapters/cache";
 
+export type TtmlPlatform = "netease" | "qqmusic";
+
 const TIMEOUT_MS = 8000;
 
 const inflight = new Map<string, Promise<string | null>>();
@@ -25,12 +27,18 @@ const inflight = new Map<string, Promise<string | null>>();
 /** 真正发起一次抓取，处理缓存读写、URL 拼装、错误分类 */
 const doFetch = async (platform: TtmlPlatform, id: string): Promise<string | null> => {
   // 开关关闭时短路，让预热调用零成本
-  if (!store.get("lyric.enableOnlineTTMLLyric")) return null;
+  const enabled =
+    store.get("system.lyric.enableOnlineTTMLLyric") ??
+    store.get("lyric.enableOnlineTTMLLyric");
+  if (!enabled) return null;
 
   const cached = getCachedTTML(platform, id);
   if (cached !== "miss") return cached;
 
-  const tmpl = store.get("lyric.amllDbServer");
+  const tmpl =
+    store.get("system.lyric.amllDbServer") ??
+    store.get("lyric.amllDbServer") ??
+    "https://amlldb.bikonoo.com/%p/%s.ttml";
   if (!tmpl || !tmpl.includes("%p") || !tmpl.includes("%s")) return null;
 
   const path = platform === "netease" ? "ncm-lyrics" : "qq-lyrics";

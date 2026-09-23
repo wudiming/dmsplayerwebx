@@ -137,14 +137,22 @@ export const useMediaStore = defineStore("media", () => {
   /** 简繁转换竞态 token */
   let transformToken = 0;
 
-  // 监听简繁转换及强迫症设置变化并重新解析当前歌词
+  // 监听简繁转换、背景歌词识别、歌词排除规则及强迫症设置变化并实时重新解析当前歌词
   watch(
-    () => [useSettingsStore().lyric.cjkTransform, useSettingsStore().preset.uncensorProfanity],
+    () => [
+      useSettingsStore().lyric.cjkTransform,
+      useSettingsStore().preset.uncensorProfanity,
+      useSettingsStore().lyric.detectBackgroundLyrics,
+      useSettingsStore().lyric.enableExcludeLyrics,
+      useSettingsStore().lyric.excludeLyricsUserKeywords,
+      useSettingsStore().lyric.excludeLyricsUserRegexes,
+    ],
     () => {
       if (activeLyric.value && lyricContent.value) {
         setLyric(activeLyric.value, lyricContent.value);
       }
     },
+    { deep: true },
   );
 
   /**

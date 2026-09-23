@@ -15,6 +15,7 @@ import fs from "node:fs";
 import { embedAudioTags } from "./services/tagWriter.js";
 import { coreLog } from "./adapters/logger.js";
 import { testNetworkProxy } from "./adapters/proxy.js";
+import { buildFingerprint, getMatchedId } from "./adapters/cache.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
   return new Promise((resolve) => {
@@ -450,8 +451,23 @@ export const handleApiRequest = async (
         const track = body.track;
         const platform = body.platform as "netease" | "qqmusic";
         try {
-          const ttml = await fetchTTML(track, platform);
-          sendJson(res, 200, { ok: Boolean(ttml), ttml });
+          const ids: string[] = [];
+          if (track) {
+            if (track.source === platform) {
+              if (platform === "qqmusic" && track.extId) ids.push(String(track.extId));
+              if (track.id) ids.push(String(track.id));
+            } else {
+              const fingerprint = buildFingerprint(track);
+              const matched = getMatchedId(fingerprint, platform);
+              if (matched?.platformId) {
+                ids.push(String(matched.platformId));
+              }
+              if (platform === "qqmusic" && track.extId) ids.push(String(track.extId));
+              if (track.id) ids.push(String(track.id));
+            }
+          }
+          const ttml = ids.length > 0 ? await fetchTTML(platform, ids) : null;
+          sendJson(res, 200, { ok: Boolean(ttml), data: ttml, ttml });
           return;
         } catch (err: any) {
           sendJson(res, 200, { ok: false, error: err?.message || String(err) });

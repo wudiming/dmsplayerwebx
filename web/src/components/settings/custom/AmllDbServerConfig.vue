@@ -15,9 +15,15 @@ const serverUrl = ref("");
 const isValidServer = (url: string): boolean =>
   isExternalUrl(url) && url.includes("%p") && url.includes("%s");
 
+const DEFAULT_AMLL_DB_SERVER = "https://amlldb.bikonoo.com/%p/%s.ttml";
+
 watch(open, (val) => {
-  if (val) serverUrl.value = props.modelValue;
+  if (val) serverUrl.value = props.modelValue || DEFAULT_AMLL_DB_SERVER;
 });
+
+const handleReset = () => {
+  serverUrl.value = DEFAULT_AMLL_DB_SERVER;
+};
 
 const handleConfirm = () => {
   const url = serverUrl.value.trim();
@@ -53,6 +59,7 @@ const handleConfirm = () => {
       </p>
     </div>
     <template #footer="{ close }">
+      <SButton variant="secondary" @click="handleReset">{{ t("common.reset") }}</SButton>
       <SButton variant="secondary" @click="close">{{ t("common.cancel") }}</SButton>
       <SButton type="primary" @click="handleConfirm">{{ t("common.confirm") }}</SButton>
     </template>
