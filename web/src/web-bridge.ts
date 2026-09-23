@@ -1516,14 +1516,16 @@ const webApi = {
   apis: {
     call: async (platform: string, name: string, params?: unknown) => {
       const cookies = getClientSessions();
+      const config = getStoredConfig();
       try {
         const res = await fetch("/api/apis/call", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "x-splayer-cookies": encodeURIComponent(JSON.stringify(cookies)),
+            "x-splayer-config": encodeURIComponent(JSON.stringify(config)),
           },
-          body: JSON.stringify({ platform, name, params, cookies }),
+          body: JSON.stringify({ platform, name, params, cookies, config }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1725,11 +1727,15 @@ const webApi = {
 
   lyrics: {
     matchById: async (platform: string, id: string) => {
+      const config = getStoredConfig();
       try {
         const res = await fetch("/api/lyrics/matchById", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform, id }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-splayer-config": encodeURIComponent(JSON.stringify(config)),
+          },
+          body: JSON.stringify({ platform, id, config }),
         });
         return await res.json();
       } catch (err: any) {
@@ -1737,11 +1743,15 @@ const webApi = {
       }
     },
     matchByQuery: async (platform: string, track: unknown) => {
+      const config = getStoredConfig();
       try {
         const res = await fetch("/api/lyrics/matchByQuery", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform, track }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-splayer-config": encodeURIComponent(JSON.stringify(config)),
+          },
+          body: JSON.stringify({ platform, track, config }),
         });
         return await res.json();
       } catch (err: any) {
@@ -1749,11 +1759,15 @@ const webApi = {
       }
     },
     fetchTTMLOverlay: async (track: unknown, platform: string) => {
+      const config = getStoredConfig();
       try {
         const res = await fetch("/api/lyrics/fetchTTMLOverlay", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ track, platform }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-splayer-config": encodeURIComponent(JSON.stringify(config)),
+          },
+          body: JSON.stringify({ track, platform, config }),
         });
         return await res.json();
       } catch (err: any) {

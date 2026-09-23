@@ -239,7 +239,7 @@ export const handleApiRequest = async (
     }
   }
 
-  // 从 Header 或 Body 解析当前客户端浏览器隔离的 Session Cookies
+  // 从 Header 或 Body 解析当前客户端浏览器隔离的 Session Cookies 与用户配置
   let clientCookies: Record<string, Record<string, string>> = {};
   const headerRaw = req.headers["x-splayer-cookies"];
   if (typeof headerRaw === "string") {
@@ -248,14 +248,26 @@ export const handleApiRequest = async (
     } catch {}
   }
 
+  let clientConfig: Record<string, any> | undefined;
+  const configHeaderRaw = req.headers["x-splayer-config"];
+  if (typeof configHeaderRaw === "string") {
+    try {
+      clientConfig = JSON.parse(decodeURIComponent(configHeaderRaw));
+    } catch {}
+  }
+
   const body = req.method === "POST" ? await readJsonBody(req) : {};
   if (body?.cookies && typeof body.cookies === "object") {
     clientCookies = { ...clientCookies, ...body.cookies };
+  }
+  if (!clientConfig && body?.config && typeof body.config === "object") {
+    clientConfig = body.config;
   }
 
   const sessionStore: RequestSessionStore = {
     cookies: clientCookies,
     patch: {},
+    config: clientConfig,
   };
 
   // 在 AsyncLocalStorage 上下文中执行请求，保证多用户完全并发隔离

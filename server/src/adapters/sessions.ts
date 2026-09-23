@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 export interface RequestSessionStore {
   cookies: Record<string, Record<string, string>>;
   patch: Record<string, Record<string, string>>;
+  config?: Record<string, any>;
 }
 
 export const requestSessionStorage = new AsyncLocalStorage<RequestSessionStore>();
