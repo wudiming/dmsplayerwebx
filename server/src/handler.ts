@@ -11,6 +11,7 @@ import * as kugouLyric from "./apis/common/lyric/kugou.js";
 import { fetchTTML } from "./apis/common/lyric/ttml.js";
 import { resolveNeteaseEnhancedUrl } from "./apis/plugins/neteaseEnhanced.js";
 import { getCommentSources, getMusicComments } from "./services/comments/index.js";
+import { openNeteaseLoginWindow } from "./services/loginWindow.js";
 import { coreLog } from "./adapters/logger.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
@@ -275,6 +276,30 @@ export const handleApiRequest = async (
           return;
         }
 
+        sendJson(res, 200, { ok: false, error: "unsupported platform" });
+        return;
+      }
+
+      // 4.1 网页登录自动获取 Cookie: POST /api/apis/openLoginWeb
+      if (pathname === "/api/apis/openLoginWeb") {
+        const platform = String(body.platform || "netease");
+        if (platform === "netease") {
+          try {
+            const cookies = await openNeteaseLoginWindow();
+            if (!cookies) {
+              sendJson(res, 200, { ok: false, error: "canceled" });
+              return;
+            }
+            sessionStore.cookies.netease = { ...(sessionStore.cookies.netease || {}), ...cookies };
+            sessionStore.patch.netease = { ...sessionStore.cookies.netease };
+            sendJson(res, 200, { ok: true, cookiePatch: sessionStore.patch });
+            return;
+          } catch (err: any) {
+            coreLog.warn("[apis] openLoginWeb netease failed:", err);
+            sendJson(res, 200, { ok: false, error: err?.message || String(err) });
+            return;
+          }
+        }
         sendJson(res, 200, { ok: false, error: "unsupported platform" });
         return;
       }

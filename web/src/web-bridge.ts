@@ -45,6 +45,7 @@ import type {
 import { webDownloadManager } from "./services/download/webDownloadManager";
 import { webPluginManager } from "./services/plugins/webPluginManager";
 import { convertCjkText, convertCjkBatch } from "./utils/cjkConverter";
+import { PITCH_SHIFTER_WORKLET_SOURCE } from "./services/pitchShifter.worklet";
 import localforage from "localforage";
 
 const statsDb = localforage.createInstance({ name: "splayer", storeName: "local_stats" });
@@ -244,6 +245,9 @@ class WebAudioPlayerEngine {
   private isNormalizationEnabled = false;
   private speed = 1.0;
   private pitchSync = true;
+  private pitch = 0;
+  private pitchNode: AudioWorkletNode | null = null;
+  private pitchWorkletLoaded = false;
 
   // 均衡器 (10 段硬件级 BiquadFilter 链路与前级增益)
   private eqFilters: BiquadFilterNode[] = [];
@@ -252,6 +256,22 @@ class WebAudioPlayerEngine {
   private eqBands: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   private preampGainDb = 0;
 
+  private async loadPitchWorklet(): Promise<void> {
+    if (!this.audioCtx || this.pitchWorkletLoaded) return;
+    try {
+      const blob = new Blob([PITCH_SHIFTER_WORKLET_SOURCE], { type: "application/javascript" });
+      const workletUrl = URL.createObjectURL(blob);
+      await this.audioCtx.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+      this.pitchWorkletLoaded = true;
+      this.pitchNode = new AudioWorkletNode(this.audioCtx, "pitch-shifter-processor");
+      this.pitchNode.port.postMessage({ pitch: this.pitchSync ? this.pitch : 0 });
+      this.reconnectAudioGraph();
+    } catch (e) {
+      console.warn("[WebAudio] Failed to load pitch worklet:", e);
+    }
+  }
+
   private initAudioContext(): void {
     if (this.audioCtx) return;
     try {
@@ -259,6 +279,7 @@ class WebAudioPlayerEngine {
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioContextClass();
+      void this.loadPitchWorklet();
       this.splitterNode = this.audioCtx.createChannelSplitter(2);
       this.analyserL = this.audioCtx.createAnalyser();
       this.analyserR = this.audioCtx.createAnalyser();
@@ -323,6 +344,7 @@ class WebAudioPlayerEngine {
         filter.disconnect();
       }
       if (this.compressorNode) this.compressorNode.disconnect();
+      if (this.pitchNode) this.pitchNode.disconnect();
       this.gainNode.disconnect();
 
       this.sourceNode.connect(this.analyser);
@@ -351,6 +373,12 @@ class WebAudioPlayerEngine {
       if (this.isNormalizationEnabled && this.compressorNode) {
         lastNode.connect(this.compressorNode);
         lastNode = this.compressorNode;
+      }
+
+      // 串接实时音调调节器
+      if (this.pitchNode) {
+        lastNode.connect(this.pitchNode);
+        lastNode = this.pitchNode;
       }
 
       // 串接主输出增益与扬声器
@@ -717,6 +745,17 @@ class WebAudioPlayerEngine {
     return { success: true };
   }
 
+  public setPitch(semitones: number): { success: boolean } {
+    const safe = Number.isFinite(semitones) ? Math.max(-12, Math.min(12, semitones)) : 0;
+    this.pitch = safe;
+    if (!this.pitchNode && this.audioCtx && !this.pitchWorkletLoaded) {
+      void this.loadPitchWorklet();
+    } else if (this.pitchNode) {
+      this.pitchNode.port.postMessage({ pitch: this.pitchSync ? this.pitch : 0 });
+    }
+    return { success: true };
+  }
+
   public setPitchSync(on: boolean): { success: boolean } {
     this.pitchSync = on;
     if ("preservesPitch" in this.audio) {
@@ -725,6 +764,9 @@ class WebAudioPlayerEngine {
       (this.audio as any).mozPreservesPitch = on;
     } else if ("webkitPreservesPitch" in this.audio) {
       (this.audio as any).webkitPreservesPitch = on;
+    }
+    if (this.pitchNode) {
+      this.pitchNode.port.postMessage({ pitch: on ? this.pitch : 0 });
     }
     return { success: true };
   }
@@ -1096,7 +1138,7 @@ const webApi = {
     setPreampGain: async (gain: number) =>
       playerEngine.setPreampGain(gain),
     setSpeed: async (speed: number) => playerEngine.setSpeed(speed),
-    setPitch: async (_semitones: number) => ({ success: true }),
+    setPitch: async (semitones: number) => playerEngine.setPitch(semitones),
     setPitchSync: async (on: boolean) => playerEngine.setPitchSync(on),
     reinit: async () => ({ success: true }),
     getOutputDevices: async () => {
@@ -1512,50 +1554,27 @@ const webApi = {
     },
 
     openLoginWeb: async (platform: string = "netease") => {
-      const url = platform === "netease" ? "https://music.163.com/#/login" : "";
-      if (!url) return { ok: false, error: "unsupported platform" };
-
-      const width = 1024;
-      const height = 720;
-      const left = Math.max(0, Math.round((window.screen.width - width) / 2));
-      const top = Math.max(0, Math.round((window.screen.height - height) / 2));
-      const windowFeatures = `width=${width},height=${height},left=${left},top=${top},popup=yes,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes`;
-
-      const loginWin = window.open(url, "netease_login_window", windowFeatures);
-      if (!loginWin) {
-        return { ok: false, error: "popup_blocked" };
-      }
       try {
-        loginWin.focus();
-      } catch {}
-
-      return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-        let settled = false;
-        const timer = setInterval(async () => {
-          if (settled) return;
-          if (loginWin.closed) {
-            settled = true;
-            clearInterval(timer);
-            try {
-              const res = await fetch("/api/apis/call", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  platform: "netease",
-                  name: "login_status",
-                  params: { timestamp: Date.now() },
-                }),
-              });
-              const data = await res.json();
-              if (data?.ok && (data?.body?.data?.profile?.userId || data?.body?.profile?.userId)) {
-                resolve({ ok: true });
-                return;
-              }
-            } catch {}
-            resolve({ ok: false, error: "canceled" });
+        const res = await fetch("/api/apis/openLoginWeb", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.cookiePatch) {
+            updateClientSessionCookies(data.cookiePatch);
           }
-        }, 1000);
-      });
+          if (data.ok) {
+            return { ok: true };
+          }
+          return { ok: false, error: data.error || "canceled" };
+        }
+        return { ok: false, error: `HTTP ${res.status}` };
+      } catch (err: any) {
+        console.warn(`[web-bridge] openLoginWeb ${platform} error:`, err);
+        return { ok: false, error: err?.message || "canceled" };
+      }
     },
 
     setCookie: async (platform: string, raw: string) => {

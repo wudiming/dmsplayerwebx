@@ -53,6 +53,7 @@ const onPresetClick = (v: number): void => {
 
 const onPitchChange = (v: number): void => {
   localPitch.value = v;
+  player.setPitch(v).catch(() => {});
 };
 const onPitchCommit = (v: number): void => {
   player.setPitch(v).catch(() => {});
