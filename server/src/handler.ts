@@ -14,6 +14,7 @@ import { getCommentSources, getMusicComments } from "./services/comments/index.j
 import fs from "node:fs";
 import { embedAudioTags } from "./services/tagWriter.js";
 import { coreLog } from "./adapters/logger.js";
+import { testNetworkProxy } from "./adapters/proxy.js";
 
 const readJsonBody = async (req: IncomingMessage): Promise<any> => {
   return new Promise((resolve) => {
@@ -107,7 +108,10 @@ export const handleApiRequest = async (
         headers["Range"] = String(req.headers.range);
       }
 
-      const upstream = await fetch(targetUrl, { headers });
+      const upstream = await fetch(targetUrl, {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers,
+      });
       const responseHeaders: Record<string, string> = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Range",
@@ -128,6 +132,10 @@ export const handleApiRequest = async (
       }
 
       res.writeHead(upstream.status, responseHeaders);
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
       if (upstream.body) {
         // Node 18+ web stream to node response stream
         const reader = upstream.body.getReader();
@@ -381,6 +389,14 @@ export const handleApiRequest = async (
           ok: true,
           neteaseEnhanced,
         });
+        return;
+      }
+
+      // 4.3 代理连通性测试: POST /api/system/testProxy
+      if (pathname === "/api/system/testProxy") {
+        const proxy = body.proxy || sessionStore.config?.system?.networkProxy;
+        const ok = await testNetworkProxy(proxy);
+        sendJson(res, 200, { ok });
         return;
       }
 

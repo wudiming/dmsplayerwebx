@@ -1234,8 +1234,18 @@ const webApi = {
     },
     testNetworkProxy: async () => {
       try {
-        const res = await fetch("/api/proxy/stream?url=" + encodeURIComponent("https://music.163.com"), { method: "HEAD" });
-        return res.ok || res.status < 500;
+        const config = getStoredConfig();
+        const proxy = config?.system?.networkProxy;
+        const res = await fetch("/api/system/testProxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proxy }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return Boolean(data.ok);
+        }
+        return false;
       } catch {
         return false;
       }
