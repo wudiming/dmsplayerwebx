@@ -287,9 +287,12 @@ export const handleApiRequest = async (
         const platform = String(body.platform || "netease");
         coreLog.info("[apis] openLoginWeb requested for platform:", platform);
         if (platform === "netease") {
+          req.socket?.setTimeout(0);
+          res.setTimeout?.(0);
           // 仅在响应连接非正常关闭时清理窗口，绝不可在 req.on('close') 中清理
           res.on("close", () => {
             if (!res.writableEnded) {
+              coreLog.info("[apis] HTTP client closed connection before login completed");
               void cancelLoginWindow();
             }
           });

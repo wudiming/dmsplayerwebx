@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,7 +6,6 @@ import puppeteer from "puppeteer-core";
 import { coreLog } from "../adapters/logger.js";
 
 const NETEASE_COOKIE_KEYS = ["MUSIC_U", "__csrf", "NMTID", "MUSIC_A"];
-const DEBUG_PORT = 9333;
 
 /** 查找系统可用的 Chrome 或 Edge 可执行文件路径 */
 export function findBrowserExecutable(): string | null {
@@ -48,8 +47,42 @@ export function findBrowserExecutable(): string | null {
   return null;
 }
 
+/** 强制终止指定 PID 及其整个子进程树 */
+function forceKillPid(pid: number): void {
+  try {
+    if (process.platform === "win32") {
+      execSync(`taskkill /F /T /PID ${pid}`, { stdio: "ignore" });
+    } else {
+      process.kill(pid, "SIGKILL");
+    }
+  } catch {}
+}
+
+/** 清理可能残留并锁定独立登录 profile 的僵尸浏览器进程及遗留 lockfile */
+function cleanStaleProfileLocks(profileDir: string): void {
+  if (process.platform === "win32") {
+    try {
+      const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+$procs = Get-CimInstance Win32_Process | Where-Object { ($_.Name -like '*chrome*' -or $_.Name -like '*edge*') -and ($_.CommandLine -like '*login_profile*') }
+foreach ($p in $procs) {
+    Stop-Process -Id $p.ProcessId -Force
+}
+`;
+      const base64 = Buffer.from(script, "utf16le").toString("base64");
+      execSync(`powershell -NoProfile -NonInteractive -EncodedCommand ${base64}`, { stdio: "ignore" });
+    } catch {}
+
+    try {
+      const lockfilePath = path.join(profileDir, "lockfile");
+      if (fs.existsSync(lockfilePath)) {
+        fs.unlinkSync(lockfilePath);
+      }
+    } catch {}
+  }
+}
+
 let currentBrowser: any = null;
-let currentChildProcess: any = null;
 let currentFinishFn: ((result: Record<string, string> | null) => void) | null = null;
 let activeLoginPromise: Promise<Record<string, string> | null> | null = null;
 
@@ -59,16 +92,12 @@ export async function cancelLoginWindow(): Promise<void> {
     currentFinishFn = null;
   }
   if (currentBrowser) {
+    const pid = currentBrowser.process?.()?.pid;
     try {
       await currentBrowser.close().catch(() => {});
     } catch {}
+    if (pid) forceKillPid(pid);
     currentBrowser = null;
-  }
-  if (currentChildProcess) {
-    try {
-      currentChildProcess.kill("SIGKILL");
-    } catch {}
-    currentChildProcess = null;
   }
   activeLoginPromise = null;
 }
@@ -80,7 +109,8 @@ export async function cancelLoginWindow(): Promise<void> {
  */
 export async function openNeteaseLoginWindow(): Promise<Record<string, string> | null> {
   if (activeLoginPromise) {
-    await cancelLoginWindow();
+    coreLog.info("[loginWindow] Reusing active login window promise");
+    return activeLoginPromise;
   }
 
   const executablePath = findBrowserExecutable();
@@ -93,47 +123,46 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
     fs.mkdirSync(loginProfileDir, { recursive: true });
   } catch {}
 
+  // 启动前排查并清理任何可能占用该配置目录的残留进程与 lockfile
+  cleanStaleProfileLocks(loginProfileDir);
+
   activeLoginPromise = (async () => {
     let pollInterval: NodeJS.Timeout | null = null;
+    let browser: any = null;
 
     try {
-      coreLog.info("[loginWindow] Spawning Chrome App window:", executablePath);
+      coreLog.info("[loginWindow] Launching Chrome App window via puppeteer:", executablePath);
 
-      // 直接使用 spawn 拉起原生 App 窗口模式，确保窗口在操作系统顶层前台显示
-      const child = spawn(
+      // 直接通过 puppeteer.launch 原生拉起 App 窗口，管道稳定管理，绝不与用户日常浏览器实例冲突
+      browser = await puppeteer.launch({
         executablePath,
-        [
+        headless: false,
+        userDataDir: loginProfileDir,
+        defaultViewport: null,
+        args: [
           "--app=https://music.163.com/#/login",
           "--window-size=1024,720",
-          `--user-data-dir=${loginProfileDir}`,
-          `--remote-debugging-port=${DEBUG_PORT}`,
           "--no-first-run",
           "--no-default-browser-check",
         ],
-        {
-          detached: true,
-          stdio: "ignore",
-        },
-      );
-      child.unref();
-      currentChildProcess = child;
+        ignoreDefaultArgs: ["--enable-automation"],
+      });
 
-      // 等待并连接 CDP 调试端口进行 Cookie 监听与提取
-      let browser: any = null;
-      for (let i = 0; i < 25; i++) {
-        await new Promise((r) => setTimeout(r, 200));
-        try {
-          browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${DEBUG_PORT}` });
-          if (browser) break;
-        } catch {}
-      }
-
-      if (!browser) {
-        throw new Error("无法连接至登录窗口调试端口");
-      }
       currentBrowser = browser;
 
-      return await new Promise<Record<string, string> | null>(async (resolve) => {
+      const pages = await browser.pages();
+      const page = pages[0] || (await browser.newPage());
+      try {
+        await page.bringToFront();
+      } catch {}
+
+      // 建立 CDP 会话以获取跨域/所有作用域的 Cookie
+      let client: any = null;
+      try {
+        client = await page.createCDPSession();
+      } catch {}
+
+      return await new Promise<Record<string, string> | null>((resolve) => {
         let settled = false;
 
         const finish = async (result: Record<string, string> | null) => {
@@ -144,63 +173,77 @@ export async function openNeteaseLoginWindow(): Promise<Record<string, string> |
             clearInterval(pollInterval);
             pollInterval = null;
           }
+          const pid = browser?.process?.()?.pid;
           try {
             if (browser && browser.connected) {
               await browser.close().catch(() => {});
             }
           } catch {}
+          if (pid) forceKillPid(pid);
           currentBrowser = null;
-          if (currentChildProcess) {
-            try {
-              currentChildProcess.kill();
-            } catch {}
-            currentChildProcess = null;
-          }
           resolve(result);
         };
 
         currentFinishFn = finish;
 
+        // 用户主动关闭窗口时，触发 disconnected 并安全结束
         browser.on("disconnected", () => {
           finish(null);
         });
 
-        const checkCookies = async (): Promise<boolean> => {
+        const checkCookies = async (): Promise<Record<string, string> | null> => {
           try {
-            if (!browser || !browser.connected) return false;
-            const pages = await browser.pages();
-            if (!pages || pages.length === 0) return false;
-            const page = pages[0];
-            const cookies = await page.cookies();
-            const musicU = cookies.find((c: any) => c.name === "MUSIC_U");
+            if (!browser || !browser.connected) return null;
+            let allCookies: any[] = [];
+            if (client) {
+              try {
+                const res = await client.send("Network.getAllCookies");
+                allCookies = res.cookies || [];
+              } catch {
+                allCookies = await page.cookies("https://music.163.com", "https://interface.music.163.com");
+              }
+            } else {
+              allCookies = await page.cookies("https://music.163.com", "https://interface.music.163.com");
+            }
+
+            const musicU = allCookies.find((c: any) => c.name === "MUSIC_U");
             if (musicU?.value) {
               const result: Record<string, string> = {};
               for (const key of NETEASE_COOKIE_KEYS) {
-                const hit = cookies.find((c: any) => c.name === key);
+                const hit = allCookies.find((c: any) => c.name === key);
                 if (hit?.value) result[key] = hit.value;
               }
               result["MUSIC_U"] = musicU.value;
-              coreLog.info("[loginWindow] Captured MUSIC_U, auto-completing login!");
-              await finish(result);
-              return true;
+              return result;
             }
           } catch {}
-          return false;
+          return null;
         };
 
         // 1. 若此前已登录，等待页面首包完成后直接获取并关闭窗口
-        await new Promise((r) => setTimeout(r, 600));
-        if (await checkCookies()) return;
+        setTimeout(async () => {
+          if (settled) return;
+          const initialResult = await checkCookies();
+          if (initialResult) {
+            coreLog.info("[loginWindow] Already logged in (MUSIC_U found in profile), auto-completing!");
+            await finish(initialResult);
+            return;
+          }
 
-        // 2. 轮询检测：等待用户在窗口中登录完成
-        pollInterval = setInterval(async () => {
-          await checkCookies();
-        }, 800);
+          // 2. 轮询检测：等待用户在窗口中登录完成
+          pollInterval = setInterval(async () => {
+            if (settled) return;
+            const result = await checkCookies();
+            if (result) {
+              coreLog.info("[loginWindow] Captured MUSIC_U from user login! Auto-completing!");
+              await finish(result);
+            }
+          }, 800);
+        }, 600);
       });
     } finally {
       activeLoginPromise = null;
       currentBrowser = null;
-      currentChildProcess = null;
       currentFinishFn = null;
     }
   })();
