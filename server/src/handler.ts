@@ -93,8 +93,8 @@ export const handleApiRequest = async (
     return;
   }
 
-  // 2. 音频流代理 (支持 Range 续传与 CORS 播放)
-  if (pathname === "/api/proxy/stream") {
+  // 2. 音频流代理 (支持 Range 续传与 CORS 播放，强制规范化 Content-Type 保证现代浏览器 HTML5 <audio> 正常解码试听片段)
+  if (pathname === "/api/proxy/stream" || pathname === "/api/proxy/stream.mp3") {
     const targetUrl = urlObj.searchParams.get("url");
     if (!targetUrl) {
       sendJson(res, 400, { error: "Missing url parameter" });
@@ -115,14 +115,15 @@ export const handleApiRequest = async (
       });
       const responseHeaders: Record<string, string> = {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Range",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+        "Access-Control-Allow-Headers": "Range, Content-Range, Accept-Ranges, Content-Type, Authorization",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges, Content-Type",
         "Accept-Ranges": "bytes",
       };
 
       for (const [key, value] of upstream.headers.entries()) {
         const lowerKey = key.toLowerCase();
         if (
-          lowerKey === "content-type" ||
           lowerKey === "content-length" ||
           lowerKey === "content-range" ||
           lowerKey === "last-modified" ||
@@ -131,6 +132,22 @@ export const handleApiRequest = async (
           responseHeaders[key] = value;
         }
       }
+
+      let contentType = upstream.headers.get("content-type") || "";
+      const lowerTarget = targetUrl.toLowerCase();
+      // 网易云等平台试听流常返回 application/octet-stream，导致浏览器 HTML5 Audio 报格式不支持拒绝播放
+      if (!contentType || contentType.includes("application/octet-stream") || !contentType.startsWith("audio/")) {
+        if (lowerTarget.includes(".flac")) {
+          contentType = "audio/flac";
+        } else if (lowerTarget.includes(".ogg")) {
+          contentType = "audio/ogg";
+        } else if (lowerTarget.includes(".m4a") || lowerTarget.includes(".mp4") || lowerTarget.includes(".aac")) {
+          contentType = "audio/mp4";
+        } else {
+          contentType = "audio/mpeg";
+        }
+      }
+      responseHeaders["content-type"] = contentType;
 
       res.writeHead(upstream.status, responseHeaders);
       if (req.method === "HEAD") {

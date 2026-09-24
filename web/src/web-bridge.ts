@@ -534,6 +534,15 @@ class WebAudioPlayerEngine {
     this.audio.addEventListener("volumechange", () => {
       this.notifyStatus();
     });
+
+    this.audio.addEventListener("error", () => {
+      const err = this.audio.error;
+      console.warn("[WebAudio] Audio element error:", err?.code, err?.message);
+      this.stopPositionTimer();
+      this.broadcast({
+        type: "sourceError",
+      });
+    });
   }
 
   private startPositionTimer(): void {
@@ -678,11 +687,8 @@ class WebAudioPlayerEngine {
       audioSrc = getDemoAudioUrl();
     } else if (source.startsWith("blob:") || source.startsWith("data:") || source.startsWith("/")) {
       audioSrc = source;
-    } else if (
-      !source.startsWith("/api/proxy/stream") &&
-      !source.includes("localhost:5173/api/proxy/stream")
-    ) {
-      audioSrc = `/api/proxy/stream?url=${encodeURIComponent(source)}`;
+    } else if (!source.includes("/api/proxy/stream")) {
+      audioSrc = `/api/proxy/stream.mp3?url=${encodeURIComponent(source)}`;
     }
 
     const trackId = options?.meta?.id || "";
