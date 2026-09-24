@@ -86,8 +86,8 @@ export const handleApiRequest = async (
   if (pathname === "/api/health") {
     sendJson(res, 200, {
       status: "ok",
-      app: "SPlayer WebX",
-      version: "1.2.0-webx",
+      app: "SPlayer Web",
+      version: "1.0.0",
       timestamp: Date.now(),
     });
     return;

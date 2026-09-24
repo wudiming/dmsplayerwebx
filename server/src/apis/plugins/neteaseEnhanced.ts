@@ -131,7 +131,7 @@ async function getJson(path: string, params: Record<string, any> = {}): Promise<
   const res = await fetch(url, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "SPlayer-WebX/1.2.0 (npi.netease.source)",
+      "User-Agent": "SPlayer-Web/1.0.0 (npi.netease.source)",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT),
   });

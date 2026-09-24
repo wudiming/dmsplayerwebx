@@ -171,7 +171,7 @@ const appearanceCategory: SettingCategory = {
           key: "showQualitySwitch",
           type: "switch",
           binding: { store: "settings", path: "appearance.showQualitySwitch" },
-          defaultValue: true,
+          defaultValue: false,
         },
       ],
     },
@@ -188,7 +188,7 @@ const appearanceCategory: SettingCategory = {
           key: "showProgressTooltip",
           type: "switch",
           binding: { store: "settings", path: "player.showProgressTooltip" },
-          defaultValue: true,
+          defaultValue: false,
           children: [
             {
               key: "showProgressLyric",

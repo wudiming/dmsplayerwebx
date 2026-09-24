@@ -74,6 +74,8 @@ export interface DailyPlayStats {
   day: string;
   /** 该日播放次数 */
   playCount: number;
+  /** 该日收听时长（毫秒） */
+  listenedMs?: number;
 }
 
 /** 某小时的播放统计，hour 为本地时区 0-23 */

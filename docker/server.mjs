@@ -22,7 +22,7 @@ try {
     }
   }
 } catch (e) {
-  console.warn("[SPlayer WebX] Failed to load backend handler:", e);
+  console.warn("[SPlayer Web] Failed to load backend handler:", e);
 }
 
 const MIME_TYPES = {
@@ -127,7 +127,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[SPlayer WebX] Server running on http://0.0.0.0:${PORT}`);
-  console.log(`[SPlayer WebX] Serving from: ${DIST_DIR}`);
-  console.log(`[SPlayer WebX] Plugin directory: ${PLUGIN_DIR}`);
+  console.log(`[SPlayer Web] Server running on http://0.0.0.0:${PORT}`);
+  console.log(`[SPlayer Web] Serving from: ${DIST_DIR}`);
+  console.log(`[SPlayer Web] Plugin directory: ${PLUGIN_DIR}`);
 });

@@ -747,6 +747,7 @@ export const useUserStore = defineStore(
       toggleArtistSubscribe,
       toggleVideoSubscribe,
       toggleRadioSubscribe,
+      $reset: resetAccountState,
     };
   },
   {

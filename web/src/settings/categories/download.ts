@@ -1,4 +1,7 @@
 import type { SettingCategory } from "@/types/settings-schema";
+import { useSettingsStore } from "@/stores/settings";
+import { toast } from "@/composables/useToast";
+import i18n from "@/i18n";
 import IconLucideDownload from "~icons/lucide/download";
 import DownloadDirConfig from "@/components/settings/custom/DownloadDirConfig.vue";
 
@@ -48,17 +51,6 @@ const downloadCategory: SettingCategory = {
           defaultValue: false,
         },
         {
-          key: "downloadFileTemplate",
-          type: "select",
-          binding: { store: "settings", path: "system.download.fileTemplate" },
-          options: [
-            { value: "{title}", labelKey: "settings.downloadFileTemplate.titleOnly" },
-            { value: "{artist} - {title}", labelKey: "settings.downloadFileTemplate.artistTitle" },
-            { value: "{title} - {artist}", labelKey: "settings.downloadFileTemplate.titleArtist" },
-          ],
-          defaultValue: "{artist} - {title}",
-        },
-        {
           key: "downloadFolderScheme",
           type: "select",
           binding: { store: "settings", path: "system.download.folderScheme" },
@@ -68,6 +60,41 @@ const downloadCategory: SettingCategory = {
             { value: "artist-album", labelKey: "settings.downloadFolderScheme.artistAlbum" },
           ],
           defaultValue: "none",
+          action: (next) => {
+            if (next !== "none") {
+              const settingsStore = useSettingsStore();
+              if (settingsStore.system.download.fileTemplate !== "{title}") {
+                settingsStore.setSystem("download.fileTemplate", "{title}");
+                toast.info(i18n.global.t("settings.downloadFileTemplate.autoAdjustedNotice"));
+              }
+            }
+          },
+        },
+        {
+          key: "downloadFileTemplate",
+          type: "select",
+          binding: { store: "settings", path: "system.download.fileTemplate" },
+          options: [
+            { value: "{title}", labelKey: "settings.downloadFileTemplate.titleOnly" },
+            { value: "{artist} - {title}", labelKey: "settings.downloadFileTemplate.artistTitle" },
+            { value: "{title} - {artist}", labelKey: "settings.downloadFileTemplate.titleArtist" },
+          ],
+          defaultValue: "{artist} - {title}",
+          confirm: {
+            when: (next) =>
+              next !== "{title}" &&
+              useSettingsStore().system.download.folderScheme !== "none",
+            titleKey: "settings.downloadFileTemplate.confirmTitle",
+            getContent: () => {
+              const scheme = useSettingsStore().system.download.folderScheme;
+              return scheme === "artist-album"
+                ? i18n.global.t("settings.downloadFileTemplate.confirmArtistAlbumDesc")
+                : i18n.global.t("settings.downloadFileTemplate.confirmArtistDesc");
+            },
+            type: "warning",
+            confirmTextKey: "settings.downloadFileTemplate.confirmUse",
+            cancelTextKey: "settings.downloadFileTemplate.keepTitleOnly",
+          },
         },
         {
           key: "downloadOverwrite",

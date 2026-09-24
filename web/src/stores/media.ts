@@ -260,6 +260,7 @@ export const useMediaStore = defineStore("media", () => {
     setLyric,
     updateLyricIndex,
     clear,
+    $reset: clear,
   };
 }, {
   persist: {

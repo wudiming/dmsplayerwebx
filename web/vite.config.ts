@@ -12,13 +12,13 @@ import Components from "unplugin-vue-components/vite";
 export default defineConfig({
   root: ".",
   define: {
-    __APP_VERSION__: JSON.stringify("1.2.0-web"),
-    __APP_REPO_URL__: JSON.stringify("https://github.com/SPlayer-Dev/SPlayer-Next"),
-    __APP_REPO_NAME__: JSON.stringify("SPlayer WebX"),
-    __APP_AUTHOR__: JSON.stringify("imsyy"),
-    __APP_HOMEPAGE__: JSON.stringify("https://splayer-next.imsyy.top"),
-    __APP_AUTHOR_URL__: JSON.stringify("https://imsyy.top"),
-    __COMMIT_HASH__: JSON.stringify("web-v1"),
+    __APP_VERSION__: JSON.stringify("1.0.0"),
+    __APP_REPO_URL__: JSON.stringify("https://github.com/wudiming/dmsplayerwebx"),
+    __APP_REPO_NAME__: JSON.stringify("wudiming/dmsplayerwebx"),
+    __APP_AUTHOR__: JSON.stringify("wudiming"),
+    __APP_HOMEPAGE__: JSON.stringify("https://github.com/wudiming/dmsplayerwebx"),
+    __APP_AUTHOR_URL__: JSON.stringify("https://github.com/wudiming"),
+    __COMMIT_HASH__: JSON.stringify("v1.0.0"),
     __COMMIT_DATE__: JSON.stringify(new Date().toISOString()),
   },
   server: {

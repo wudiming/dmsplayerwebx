@@ -335,6 +335,17 @@ export const useLibraryStore = defineStore("library", () => {
     };
   };
 
+  const $reset = (): void => {
+    tracks.value = [];
+    scanDirs.value = [];
+    scanning.value = false;
+    scanProgress.value = null;
+    initialized.value = false;
+    artistAvatars.value = {};
+    likedOrderedIds.value = [];
+    likedIdSet.value = new Set();
+  };
+
   return {
     tracks,
     scanDirs,
@@ -364,5 +375,6 @@ export const useLibraryStore = defineStore("library", () => {
     getArtistProfile,
     folderTree,
     folderCount,
+    $reset,
   };
 });

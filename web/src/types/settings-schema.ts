@@ -20,7 +20,9 @@ export interface SettingConfirm {
   /** 标题 i18n key */
   titleKey?: string;
   /** 正文 i18n key */
-  contentKey: string;
+  contentKey?: string;
+  /** 动态生成正文内容（优先于 contentKey） */
+  getContent?: (nextValue: unknown) => string;
   /** 对话框类型，默认 warning */
   type?: "default" | "info" | "warning" | "error";
   /** 确认按钮文案 i18n key */

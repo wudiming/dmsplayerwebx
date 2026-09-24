@@ -1,0 +1,24 @@
+services:
+  splayer-web:
+    # 镜像地址：默认使用 Docker Hub 镜像（用户名可在部署时通过环境变量或修改此处指定）
+    image: ${DOCKER_IMAGE:-wudiming/dmsplayerwebx:latest}
+    # 如需在本地源码构建，可取消下方两行注释：
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: splayer-web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - PORT=5173
+      - TZ=Asia/Shanghai
+      # 【可选】配置自建网易云增强版音源服务地址 (用于音源解灰与无损解析)
+      # - NETEASE_ENHANCED_URL=http://your-api-host:3000
+    volumes:
+      # 持久化音源插件目录
+      - splayer-plugins:/app/plugins
+
+volumes:
+  splayer-plugins:
+    driver: local

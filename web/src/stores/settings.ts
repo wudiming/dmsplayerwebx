@@ -99,9 +99,23 @@ const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
   if (groups.length >= 2) {
     for (const key of secondaryDefault) {
       if (!seen.has(key)) {
-        groups[1].keys.push(key);
+        const historyIdx = groups[1].keys.indexOf("/history");
+        if (historyIdx >= 0 && key !== "/history") {
+          groups[1].keys.splice(historyIdx, 0, key);
+        } else {
+          groups[1].keys.push(key);
+        }
         seen.add(key);
       }
+    }
+    // 确保默认顺序：网络终端 -> 下载管理 -> 播放历史（播放历史始终在分组二最底端）
+    const g2 = groups[1].keys;
+    const historyIdx = g2.indexOf("/history");
+    const downloadIdx = g2.indexOf("/download");
+    if (historyIdx !== -1 && downloadIdx !== -1 && historyIdx < downloadIdx) {
+      g2.splice(downloadIdx, 1);
+      const newHistoryIdx = g2.indexOf("/history");
+      g2.splice(newHistoryIdx, 0, "/download");
     }
   }
 
@@ -158,7 +172,7 @@ export const useSettingsStore = defineStore(
       sidebarKeepEmptyDivider: false,
       sidebarNameWithDivider: false,
       sidebarPlaylistOrder: { myLocal: [], myOnline: [], subscribed: [] },
-      showQualitySwitch: true,
+      showQualitySwitch: false,
       closeAction: "hide",
       rememberCloseChoice: false,
       fontFamily: "",
@@ -187,7 +201,7 @@ export const useSettingsStore = defineStore(
       songLevel: "hq",
       allowTrialPlay: false,
       timeFormat: "current-total",
-      showProgressTooltip: true,
+      showProgressTooltip: false,
       showProgressLyric: false,
       snapToLyric: false,
       showLyricInBar: true,
@@ -366,7 +380,13 @@ export const useSettingsStore = defineStore(
       } catch (err) {
         console.error("[settings] config.set failed", keyPath, err);
       }
-      if (keyPath === "player.fadeEnabled" || keyPath === "player.fadeDuration") {
+      if (keyPath === "system.uiZoom") {
+        const zoom = Number(value) || 100;
+        try {
+          document.documentElement.style.zoom = `${zoom}%`;
+          localStorage.setItem("system.uiZoom", String(zoom));
+        } catch {}
+      } else if (keyPath === "player.fadeEnabled" || keyPath === "player.fadeDuration") {
         await window.api.player.setFadeDuration(
           system.player.fadeEnabled ? system.player.fadeDuration : 0,
         );
@@ -391,6 +411,124 @@ export const useSettingsStore = defineStore(
       }
     };
 
+    /** 重置所有设置项回默认值 */
+    const $reset = (): void => {
+      locale.value = "zh-CN";
+      Object.assign(appearance, {
+        layoutMode: "default",
+        routeTransition: "fade",
+        sidebarCollapsed: false,
+        sidebarPlaylistCover: false,
+        sidebarNavGroups: DEFAULT_SIDEBAR_NAV_GROUPS.map((group) => ({
+          ...group,
+          keys: [...group.keys],
+        })),
+        sidebarHiddenKeys: [],
+        sidebarKeepEmptyDivider: false,
+        sidebarNameWithDivider: false,
+        sidebarPlaylistOrder: { myLocal: [], myOnline: [], subscribed: [] },
+        showQualitySwitch: false,
+        closeAction: "hide",
+        rememberCloseChoice: false,
+        fontFamily: "",
+      });
+      Object.assign(player, {
+        playerBgType: "blur",
+        playerBgFps: 30,
+        playerBgFlowSpeed: 4,
+        playerBgRenderScale: 0.5,
+        playerBgFreezeOnPause: false,
+        playerBgBeat: false,
+        coverLayout: "default",
+        coverLyricRatio: 0.45,
+        autoCenterCover: true,
+        showPlaybackSource: false,
+        followCoverColor: true,
+        autoImmersive: true,
+        outputDevice: null,
+        pauseOnDeviceSwitch: false,
+        rememberDeviceVolume: false,
+        enableSpectrum: false,
+        spectrumBarWidth: 4,
+        reverseSpectrum: false,
+        songLevel: "hq",
+        allowTrialPlay: false,
+        timeFormat: "current-total",
+        showProgressTooltip: false,
+        showProgressLyric: false,
+        snapToLyric: false,
+        showLyricInBar: true,
+        preloadNextTrack: false,
+        searchPlayBehavior: "current",
+      });
+      Object.assign(preset, {
+        fuckDjMode: false,
+        uncensorProfanity: false,
+        hideVipTag: false,
+        hideQualityTag: false,
+        showSubtitle: true,
+      });
+      Object.assign(lyric, {
+        lyricSourcePreference: "auto",
+        lyricSourceOrder: [...DEFAULT_LYRIC_SOURCE_ORDER],
+        lyricFormatOrder: [...DEFAULT_LYRIC_FORMAT_ORDER],
+        smartPreferOnline: false,
+        preferPluginLyric: false,
+        detectBackgroundLyrics: true,
+        cjkTransform: "none",
+        adaptiveFontSize: true,
+        fontSize: 48,
+        fontWeight: 700,
+        lyricBlendMode: "normal",
+        fontFamily: "",
+        fontFamilyLatin: "",
+        fontFamilyJapanese: "",
+        fontFamilyKorean: "",
+        fontFamilyChinese: "",
+        showTranslation: true,
+        showRuby: true,
+        showRomanization: true,
+        showWordRomanization: true,
+        enableScale: true,
+        bgAlwaysBelow: false,
+        enableWordHighlight: true,
+        enableFloatAnimation: false,
+        enableEmphasizeEffect: false,
+        enableBlur: false,
+        hidePassedLines: false,
+        springPreset: "default",
+        springMass: 0.9,
+        springDamping: 15,
+        springStiffness: 90,
+        alignPosition: 0.35,
+        wordFadeWidth: 0.5,
+        inactiveAlpha: 0.2,
+        enableExcludeLyrics: true,
+        excludeLyricsUserKeywords: [],
+        excludeLyricsUserRegexes: [],
+        engine: "physics",
+        useAMSpring: true,
+        amllVerticalSpringMass: 1,
+        amllVerticalSpringDamping: 15,
+        amllVerticalSpringStiffness: 100,
+        amllVerticalSpringSoft: false,
+        amllScaleSpringMass: 1,
+        amllScaleSpringDamping: 20,
+        amllScaleSpringStiffness: 100,
+        amllScaleSpringSoft: false,
+        amllCleanUnintentionalOverlaps: true,
+        amllTryAdvanceStartTime: true,
+        amllConvertExcessiveBackgroundLines: true,
+        amllSyncMainAndBackgroundLines: true,
+        amllNormalizeSpaces: true,
+        amllResetLineTimestamps: true,
+      });
+      deepAssign(
+        system as unknown as Record<string, unknown>,
+        structuredClone(defaultSystemConfig) as unknown as Record<string, unknown>,
+      );
+    };
+
     return {
       locale,
       appearance,
@@ -404,6 +542,7 @@ export const useSettingsStore = defineStore(
       syncSystem,
       setSystem,
       afterLocalChange,
+      $reset,
     };
   },
   {

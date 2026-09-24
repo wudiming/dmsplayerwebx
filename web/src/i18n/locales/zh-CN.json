@@ -17,14 +17,14 @@
     "finish": "完成",
     "footer": "可随时在「设置」中调整本次未配置的内容",
     "welcome": {
-      "title": "欢迎使用 SPlayer-Next",
-      "subtitle": "一个现代化的桌面音乐播放器，完成几步设置即可开始享用",
+      "title": "欢迎使用 SPlayer Web",
+      "subtitle": "一个现代化的音乐播放器，完成几步设置即可开始享用",
       "start": "开始设置",
       "features": {
         "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
         "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
         "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词" }
+        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词，全屏歌词与多种视觉效果" }
       }
     },
     "agreement": {
@@ -36,11 +36,11 @@
     },
     "library": {
       "title": "本地音乐库",
-      "subtitle": "添加要扫描的音乐文件夹，SPlayer-Next 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
+      "subtitle": "添加要扫描的音乐文件夹，SPlayer Web 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
     },
     "streaming": {
       "title": "流媒体服务器",
-      "subtitle": "SPlayer-Next 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
+      "subtitle": "SPlayer Web 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
       "hint": "完成引导后，前往「设置 → 媒体源配置 → 流媒体管理」即可添加服务器并测试连接",
       "servers": {
         "subsonic": "Subsonic 兼容",
@@ -58,7 +58,7 @@
     },
     "hotkeys": {
       "title": "快捷键",
-      "subtitle": "SPlayer-Next 内置了完整的播放控制快捷键，需要时随时调用",
+      "subtitle": "SPlayer Web 内置了完整的播放控制快捷键，需要时随时调用",
       "tips": {
         "global": {
           "title": "全局快捷键",
@@ -1899,7 +1899,10 @@
       "confirmTitle": "恢复设置并重启？",
       "confirmDesc": "将用备份文件覆盖当前的设置项，应用会立即重启以让全部设置生效；本地音乐库、歌单与播放历史不受影响",
       "invalid": "备份文件无效",
-      "failed": "恢复失败"
+      "failed": "恢复失败",
+      "parseFailed": "备份文件解析失败",
+      "invalidFormat": "备份文件格式不正确",
+      "success": "设置恢复成功，正在重新加载..."
     },
     "resetSettings": {
       "label": "重置设置",
@@ -1907,7 +1910,8 @@
       "button": "重置",
       "confirmTitle": "重置设置？",
       "confirmDesc": "全部设置项将还原为默认值，操作不可恢复",
-      "done": "设置已重置"
+      "done": "设置已重置",
+      "failed": "重置设置失败"
     },
     "resetAll": {
       "label": "清除全部数据",
@@ -1915,7 +1919,8 @@
       "button": "清除",
       "confirmTitle": "清除全部数据？",
       "confirmDesc": "将清空全部歌单、登录状态、缓存并重置设置，操作不可恢复",
-      "done": "全部数据已清除"
+      "done": "全部数据已清除",
+      "failed": "清除全部数据失败"
     },
     "plugins": {
       "securityWarningTitle": "安装前请注意安全风险",
@@ -2078,7 +2083,13 @@
       "description": "下载文件的命名方式",
       "titleOnly": "歌曲名",
       "artistTitle": "歌手 - 歌曲名",
-      "titleArtist": "歌曲名 - 歌手"
+      "titleArtist": "歌曲名 - 歌手",
+      "confirmTitle": "命名格式冗余提示",
+      "confirmArtistDesc": "当前已开启「按歌手分文件夹」，歌曲文件已归入对应歌手目录中。在文件名中再次包含歌手名称可能会造成信息冗余，是否确认使用该格式？",
+      "confirmArtistAlbumDesc": "当前已开启「按歌手 / 专辑分文件夹」，歌曲文件已按歌手及专辑目录归档。在文件名中再次包含歌手名称可能会造成信息冗余，是否确认使用该格式？",
+      "confirmUse": "仍然使用",
+      "keepTitleOnly": "保持仅歌曲名",
+      "autoAdjustedNotice": "已开启文件智能分类，文件名格式已自动调整为「歌曲名」"
     },
     "downloadFolderScheme": {
       "label": "文件智能分类",

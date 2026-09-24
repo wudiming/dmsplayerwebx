@@ -170,9 +170,9 @@ const isEmpty = computed(
 );
 
 /** 插件开发文档 */
-const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
+const DOCS_URL = "";
 /** 提交入口 */
-const SUBMIT_URL = "https://github.com/SPlayer-Dev/plugins/issues/new/choose";
+const SUBMIT_URL = "";
 
 /** 已安装 / 插件市场 切换 */
 const tab = ref("installed");
@@ -271,6 +271,7 @@ const refreshMarket = async (): Promise<void> => {
 
     <!-- 发布入口 -->
     <div
+      v-if="SUBMIT_URL || DOCS_URL"
       class="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 pt-4 text-xs text-on-surface-variant/60"
     >
       <span>{{ t("settings.plugins.publishHint") }}</span>

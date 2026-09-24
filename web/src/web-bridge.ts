@@ -1,5 +1,5 @@
 /**
- * SPlayer-Next Web 适配层 (Web Bridge)
+ * SPlayer Web 适配层 (Web Bridge)
  * 在纯浏览器环境下 Polyfill `window.electron` 与 `window.api`
  * 实现 Web Audio 播放、60FPS 实时频谱 FFT、MediaSession 系统集成与全量交互数据
  */
@@ -172,12 +172,129 @@ function getDemoAudioUrl(): string {
 
 
 const DEFAULT_QUALITY: AudioQuality = {
-  sampleRate: 48000,
+  sampleRate: 44100,
   channels: 2,
-  bitsPerSample: 24,
-  bitRate: 921000,
-  codec: "FLAC (Web Hi-Res)",
+  bitsPerSample: 16,
+  bitRate: 320000,
+  codec: "MP3",
 };
+
+/** 从播放 URL 或曲目元数据中解析真实音质和音频编码 */
+function detectAudioQuality(source: string, meta?: Track | null): AudioQuality {
+  if (
+    meta?.quality?.codec &&
+    meta.quality.codec !== "unknown" &&
+    meta.quality.codec !== "FLAC (Web Hi-Res)"
+  ) {
+    return meta.quality;
+  }
+
+  let targetPath = "";
+  try {
+    if (source.includes("/api/proxy/stream?url=")) {
+      const parsed = new URL(source, "http://localhost");
+      targetPath = decodeURIComponent(parsed.searchParams.get("url") || "");
+    } else {
+      targetPath = source;
+    }
+  } catch {
+    targetPath = source;
+  }
+
+  const cleanPath = (targetPath.split("?")[0] || "").toLowerCase();
+  const metaPath = (meta?.cueAudioPath || meta?.path || "").toLowerCase();
+  const ext = (cleanPath.split(".").pop() || metaPath.split(".").pop() || "").toLowerCase();
+
+  if (cleanPath.endsWith(".flac") || metaPath.endsWith(".flac") || ext === "flac") {
+    return {
+      codec: "FLAC",
+      sampleRate: 48000,
+      channels: 2,
+      bitsPerSample: 24,
+      bitRate: 921000,
+    };
+  }
+  if (cleanPath.endsWith(".mp3") || metaPath.endsWith(".mp3") || ext === "mp3") {
+    return {
+      codec: "MP3",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 320000,
+    };
+  }
+  if (
+    cleanPath.endsWith(".m4a") ||
+    cleanPath.endsWith(".aac") ||
+    metaPath.endsWith(".m4a") ||
+    metaPath.endsWith(".aac") ||
+    ext === "m4a" ||
+    ext === "aac"
+  ) {
+    return {
+      codec: "AAC",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 256000,
+    };
+  }
+  if (cleanPath.endsWith(".wav") || metaPath.endsWith(".wav") || ext === "wav") {
+    return {
+      codec: "WAV",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 1411200,
+    };
+  }
+  if (
+    cleanPath.endsWith(".ogg") ||
+    cleanPath.endsWith(".opus") ||
+    metaPath.endsWith(".ogg") ||
+    metaPath.endsWith(".opus") ||
+    ext === "ogg" ||
+    ext === "opus"
+  ) {
+    return {
+      codec: "OGG",
+      sampleRate: 48000,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 192000,
+    };
+  }
+  if (cleanPath.endsWith(".alac") || metaPath.endsWith(".alac") || ext === "alac") {
+    return {
+      codec: "ALAC",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 850000,
+    };
+  }
+  if (cleanPath.endsWith(".ape") || metaPath.endsWith(".ape") || ext === "ape") {
+    return {
+      codec: "APE",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 850000,
+    };
+  }
+
+  if (meta?.source === "qqmusic") {
+    return {
+      codec: "AAC",
+      sampleRate: 44100,
+      channels: 2,
+      bitsPerSample: 16,
+      bitRate: 256000,
+    };
+  }
+
+  return DEFAULT_QUALITY;
+}
 
 
 
@@ -569,11 +686,15 @@ class WebAudioPlayerEngine {
     }
 
     const trackId = options?.meta?.id || "";
+    const quality = detectAudioQuality(source, options?.meta);
     const detail = {
-      quality: options?.meta?.quality || DEFAULT_QUALITY,
+      quality,
       embeddedLyric: "",
       externalLyrics: [],
     };
+    if (options?.meta) {
+      options.meta.quality = quality;
+    }
 
     this.currentTrack = options?.meta || null;
 
@@ -597,6 +718,7 @@ class WebAudioPlayerEngine {
         detail,
         mediaInfo: {
           duration,
+          quality,
         },
       },
     };
@@ -1064,6 +1186,56 @@ function compressBackgroundImage(dataUrl: string, maxDim = 2560): Promise<string
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
+}
+
+/** 从曲目对象及其历史数据中解析规范的音频格式名称 */
+function resolveCodecFromTrack(tr: Track): string {
+  // 1. 若质量信息存在且不为旧版占位符
+  if (tr.quality?.codec && tr.quality.codec !== "unknown") {
+    const raw = tr.quality.codec.toUpperCase();
+    if (raw !== "FLAC (WEB HI-RES)") {
+      if (raw.includes("FLAC")) return "FLAC";
+      if (raw.includes("MP3")) return "MP3";
+      if (raw.includes("AAC") || raw.includes("M4A")) return "AAC";
+      if (raw.includes("WAV")) return "WAV";
+      if (raw.includes("OGG") || raw.includes("OPUS")) return "OGG";
+      if (raw.includes("ALAC")) return "ALAC";
+      if (raw.includes("APE")) return "APE";
+      if (raw.includes("WMA")) return "WMA";
+      return tr.quality.codec.toUpperCase();
+    }
+  }
+
+  // 2. 本地文件路径或 CUE 音轨路径后缀
+  const filePath = (tr.cueAudioPath || tr.path || "").toLowerCase();
+  if (filePath) {
+    const clean = filePath.split("?")[0].split("#")[0];
+    const ext = clean.split(".").pop();
+    if (ext === "flac") return "FLAC";
+    if (ext === "mp3") return "MP3";
+    if (ext === "m4a" || ext === "aac") return "AAC";
+    if (ext === "wav") return "WAV";
+    if (ext === "ogg" || ext === "opus") return "OGG";
+    if (ext === "alac") return "ALAC";
+    if (ext === "ape") return "APE";
+    if (ext === "wma") return "WMA";
+  }
+
+  // 3. 插件或老版本可能携带的 format 字段
+  if ((tr as any).format) {
+    const fmt = String((tr as any).format).toUpperCase();
+    if (fmt.includes("FLAC")) return "FLAC";
+    if (fmt.includes("MP3")) return "MP3";
+    if (fmt.includes("AAC") || fmt.includes("M4A")) return "AAC";
+    if (fmt.includes("WAV")) return "WAV";
+    if (fmt.includes("OGG") || fmt.includes("OPUS")) return "OGG";
+    if (fmt) return fmt;
+  }
+
+  // 4. 针对历史已存入 "FLAC (Web Hi-Res)" 占位符且无文件路径的在线歌曲
+  if (tr.source === "qqmusic") return "AAC";
+  if (tr.fee === 1) return "FLAC";
+  return "MP3";
 }
 
 // ─── 4. 构建 window.api 完整门面 ───
@@ -2150,7 +2322,7 @@ const webApi = {
           for (const ar of tr.artists || []) {
             if (ar.name) artistSet.add(ar.name);
           }
-          const codec = tr.format || "FLAC";
+          const codec = resolveCodecFromTrack(tr);
           codecCounts[codec] = (codecCounts[codec] || 0) + 1;
         }
       }
@@ -2179,10 +2351,12 @@ const webApi = {
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
       const counts: Record<string, number> = {};
+      const durations: Record<string, number> = {};
       for (const ev of events) {
         if (!ev.startedAt) continue;
         const dStr = formatLocalDate(new Date(ev.startedAt));
         counts[dStr] = (counts[dStr] || 0) + 1;
+        durations[dStr] = (durations[dStr] || 0) + (ev.listenedMs || 0);
       }
 
       const list: DailyPlayStats[] = [];
@@ -2193,6 +2367,7 @@ const webApi = {
         list.push({
           day: dayStr,
           playCount: counts[dayStr] || 0,
+          listenedMs: durations[dayStr] || 0,
         });
       }
       return list;

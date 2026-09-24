@@ -55,7 +55,7 @@ const onCookieDialogOpen = (open: boolean): void => {
     <div class="flex flex-col items-center gap-4 py-3">
       <div class="flex flex-col items-center gap-2">
         <SLogo :size="48" />
-        <div class="text-xl font-semibold text-on-surface">SPlayer-Next</div>
+        <div class="text-xl font-semibold text-on-surface">SPlayer Web</div>
       </div>
       <QrLoginPanel
         ref="panelRef"

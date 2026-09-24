@@ -12,8 +12,8 @@ export const DEFAULT_NETEASE_ENHANCED_PLUGIN: PluginInfo = {
     name: "网易云·增强版",
     version: "1.0.0",
     description: "基于 NeteaseCloudMusicApi Enhanced 自建服务的音源插件，支持播放地址解析（含解灰）、歌词、封面、评论兜底",
-    author: "you",
-    homepage: "https://npi.881128.xyz",
+    author: "Community",
+    homepage: "",
     type: "source",
     grant: ["network"],
     apiLevel: 3,
@@ -197,7 +197,8 @@ class WebPluginManager {
     try {
       const songId = String(params.musicInfo.id || params.musicInfo.songmid || params.musicInfo.songId || "").trim();
       if (!songId) return { ok: false, error: "缺少歌曲 ID" };
-      const baseUrl = plugin?.manifest?.homepage || "https://npi.881128.xyz";
+      const baseUrl = plugin?.manifest?.homepage || (import.meta.env.VITE_NETEASE_ENHANCED_URL as string) || "";
+      if (!baseUrl) return { ok: false, error: "未配置网易云增强版服务地址" };
       const directRes = await fetch(`${baseUrl}/song/url/match?id=${songId}`);
       if (directRes.ok) {
         const directData = await directRes.json();

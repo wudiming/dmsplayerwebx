@@ -82,13 +82,14 @@ const halfRange = computed(() => {
 interface HeatCell {
   day: string;
   playCount: number;
+  listenedMs: number;
   date: Date;
   isFuture: boolean;
 }
 
 /** 按周排列的半年网格数据（固定 26~27 周，每周严格 7 天） */
 const heatWeeks = computed<(HeatCell | null)[][]>(() => {
-  const map = new Map(props.daily.map((item) => [item.day, item.playCount]));
+  const map = new Map(props.daily.map((item) => [item.day, item]));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -108,9 +109,11 @@ const heatWeeks = computed<(HeatCell | null)[][]>(() => {
       } else {
         const isFuture = date.getTime() > today.getTime();
         const key = dayKey(date);
+        const dayData = map.get(key);
         week.push({
           day: key,
-          playCount: isFuture ? 0 : (map.get(key) ?? 0),
+          playCount: isFuture ? 0 : (dayData?.playCount ?? 0),
+          listenedMs: isFuture ? 0 : (dayData?.listenedMs ?? 0),
           date,
           isFuture,
         });
@@ -122,37 +125,41 @@ const heatWeeks = computed<(HeatCell | null)[][]>(() => {
   return weeks;
 });
 
-const maxDayPlays = computed(() => Math.max(0, ...props.daily.map((item) => item.playCount)));
-
 /** 当前半年中有收听记录的天数 */
 const activeDaysCount = computed(() => {
   let count = 0;
   for (const week of heatWeeks.value) {
     for (const cell of week) {
-      if (cell && cell.playCount > 0) count++;
+      if (cell && (cell.listenedMs > 0 || cell.playCount > 0)) count++;
     }
   }
   return count;
 });
 
+/** 15分钟、1小时、2小时、3小时（毫秒） */
+const MS_15_MIN = 15 * 60 * 1000;
+const MS_1_HOUR = 60 * 60 * 1000;
+const MS_2_HOUR = 2 * 60 * 60 * 1000;
+const MS_3_HOUR = 3 * 60 * 60 * 1000;
+
 /** 5 级颜色深浅阶梯 (0 级底色 0.06，1~4 级从少到多逐步加深) */
 const HEATMAP_LEVEL_ALPHAS = [0.06, 0.25, 0.48, 0.72, 0.95];
 
 /**
- * 按播放次数映射基础背景色（5 级清晰色彩深度阶梯）
- * @param playCount - 播放次数
+ * 按收听时长映射基础背景色（0级: <15m, 1级: 15m~1h, 2级: 1h~2h, 3级: 2h~3h, 4级: >3h）
+ * @param listenedMs - 收听时长（毫秒）
  * @returns 背景色样式
  */
-const colorFromPlayCount = (playCount: number): Record<string, string> => {
-  if (playCount <= 0) return { backgroundColor: `rgb(var(--s-primary) / ${HEATMAP_LEVEL_ALPHAS[0]})` };
-  const max = maxDayPlays.value || 1;
-  const ratio = playCount / max;
+const colorFromDuration = (listenedMs: number): Record<string, string> => {
+  if (listenedMs < MS_15_MIN) {
+    return { backgroundColor: `rgb(var(--s-primary) / ${HEATMAP_LEVEL_ALPHAS[0]})` };
+  }
   let alpha = HEATMAP_LEVEL_ALPHAS[1];
-  if (ratio > 0.75) {
+  if (listenedMs > MS_3_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[4];
-  } else if (ratio > 0.5) {
+  } else if (listenedMs > MS_2_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[3];
-  } else if (ratio > 0.25) {
+  } else if (listenedMs > MS_1_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[2];
   }
   return { backgroundColor: `rgb(var(--s-primary) / ${alpha})` };
@@ -169,7 +176,7 @@ const cellStyle = (cell: HeatCell): Record<string, string> => {
       backgroundColor: "rgb(var(--s-primary) / 0.03)",
     };
   }
-  return colorFromPlayCount(cell.playCount);
+  return colorFromDuration(cell.listenedMs);
 };
 
 interface MonthPosition {
@@ -232,14 +239,39 @@ const heatRows = computed(() => {
 });
 
 /**
+ * 格式化毫秒为直观时长描述
+ * @param ms - 毫秒数
+ */
+const formatDurationText = (ms: number): string => {
+  const isZh = locale.value?.startsWith("zh");
+  const totalMin = Math.round(ms / 60000);
+  if (totalMin < 1) return isZh ? "< 1 分钟" : "< 1 min";
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  if (isZh) {
+    if (hours === 0) return `${minutes} 分钟`;
+    if (minutes === 0) return `${hours} 小时`;
+    return `${hours} 小时 ${minutes} 分钟`;
+  }
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+};
+
+/**
  * 生成格子提示文本
  * @param cell - 格子数据，空占位为 null
- * @returns 日期 + 播放次数
+ * @returns 日期 + 时长 + 播放首数
  */
 const dayTooltip = (cell: HeatCell | null): string => {
   if (!cell) return "";
   if (cell.isFuture) return cell.day;
-  return `${cell.day} · ${t("stats.plays", { count: cell.playCount }, cell.playCount)}`;
+  if (cell.listenedMs <= 0 && cell.playCount <= 0) {
+    return `${cell.day} · ${t("stats.noPlayHistory")}`;
+  }
+  const durStr = formatDurationText(cell.listenedMs);
+  const playStr = t("stats.plays", { count: cell.playCount }, cell.playCount);
+  return `${cell.day} · ${durStr} · ${playStr}`;
 };
 
 const hourlyMax = computed(() => Math.max(0, ...props.hourly.map((item) => item.playCount)));
@@ -261,9 +293,47 @@ const hourlyPoints = computed<ChartPoint[]>(() =>
     };
   }),
 );
-const peakPoint = computed(() => (peakHour.value ? hourlyPoints.value[peakHour.value.hour] : null));
-const peakLabelX = computed(() => Math.min(212, Math.max(28, peakPoint.value?.x ?? 0)));
-const peakLabelY = computed(() => Math.max(20, (peakPoint.value?.y ?? 0) - 20));
+const hoveredHour = ref<number | null>(null);
+
+const activeHourlyItem = computed(() => {
+  if (hoveredHour.value !== null) {
+    const item = props.hourly.find((h) => h.hour === hoveredHour.value);
+    return {
+      hour: hoveredHour.value,
+      playCount: item?.playCount ?? 0,
+      isHovered: true,
+    };
+  }
+  if (peakHour.value) {
+    return {
+      hour: peakHour.value.hour,
+      playCount: peakHour.value.playCount,
+      isHovered: false,
+    };
+  }
+  return null;
+});
+
+const activePoint = computed(() =>
+  activeHourlyItem.value ? hourlyPoints.value[activeHourlyItem.value.hour] : null,
+);
+const activeLabelX = computed(() => Math.min(208, Math.max(32, activePoint.value?.x ?? 0)));
+const activeLabelY = computed(() => {
+  const py = activePoint.value?.y ?? 120;
+  return py < 40 ? py + 24 : py - 20;
+});
+
+const onHourlyMouseMove = (e: MouseEvent): void => {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  const hour = Math.round((x / rect.width) * 23);
+  hoveredHour.value = Math.max(0, Math.min(23, hour));
+};
+
+const onHourlyMouseLeave = (): void => {
+  hoveredHour.value = null;
+};
 
 /** 使用 Catmull-Rom 转贝塞尔曲线平滑连接相邻时段 */
 const hourlyLinePath = computed(() => {
@@ -428,8 +498,12 @@ const codecLabel = (codec: string): string => {
         </h3>
       </div>
 
-      <div class="relative min-h-0 flex-1">
-        <svg class="absolute inset-0 size-full" viewBox="0 0 240 128" preserveAspectRatio="none">
+      <div
+        class="relative min-h-0 flex-1 cursor-crosshair select-none"
+        @mousemove="onHourlyMouseMove"
+        @mouseleave="onHourlyMouseLeave"
+      >
+        <svg class="absolute inset-0 size-full pointer-events-none" viewBox="0 0 240 128" preserveAspectRatio="none">
           <template v-if="!loading && hourlyTotal > 0">
             <path :d="hourlyAreaPath" fill="rgb(var(--s-primary) / 0.08)" />
             <path
@@ -443,31 +517,43 @@ const codecLabel = (codec: string): string => {
             />
           </template>
         </svg>
-        <!-- 最高点指示点 -->
+
+        <!-- 悬停指示参考竖线 -->
         <div
-          v-if="!loading && hourlyTotal > 0 && peakHour"
-          class="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-surface-panel shadow-sm"
+          v-if="!loading && hourlyTotal > 0 && activePoint && activeHourlyItem?.isHovered"
+          class="pointer-events-none absolute top-1 bottom-1 w-px -translate-x-1/2 border-l border-dashed border-primary/40 transition-[left] duration-75"
+          :style="{ left: `${(activePoint.x / 240) * 100}%` }"
+        />
+
+        <!-- 当前指示点（最高点或悬停点） -->
+        <div
+          v-if="!loading && hourlyTotal > 0 && activePoint"
+          class="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-surface-panel shadow-sm transition-[left,top] duration-75"
           :style="{
-            left: `${(hourlyPoints[peakHour.hour].x / 240) * 100}%`,
-            top: `${(hourlyPoints[peakHour.hour].y / 128) * 100}%`,
+            left: `${(activePoint.x / 240) * 100}%`,
+            top: `${(activePoint.y / 128) * 100}%`,
           }"
         />
-        <!-- 最高峰时段提示气泡 -->
+
+        <!-- 当前时段提示气泡 -->
         <div
-          v-if="!loading && hourlyTotal > 0 && peakHour"
-          class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-primary px-2 py-1 text-center text-[10px] font-semibold text-on-primary tabular-nums shadow-md"
+          v-if="!loading && hourlyTotal > 0 && activeHourlyItem"
+          class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-primary px-2 py-1 text-center text-[10px] font-semibold text-on-primary tabular-nums shadow-md transition-[left,top] duration-75"
           :style="{
-            left: `${(peakLabelX / 240) * 100}%`,
-            top: `${(peakLabelY / 128) * 100}%`,
+            left: `${(activeLabelX / 240) * 100}%`,
+            top: `${(activeLabelY / 128) * 100}%`,
           }"
         >
           <span
             class="block whitespace-nowrap text-[9px] font-medium leading-none text-on-primary/80"
           >
-            {{ t("stats.peakListening") }}
+            {{ activeHourlyItem.isHovered ? t("stats.listeningHours") : t("stats.peakListening") }}
           </span>
           <span class="mt-1 block whitespace-nowrap text-xs font-bold leading-none">
-            {{ String(peakHour.hour).padStart(2, "0") }}:00
+            {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00
+            <template v-if="activeHourlyItem.isHovered">
+              · {{ activeHourlyItem.playCount }} {{ t("stats.playsUnit") }}
+            </template>
           </span>
         </div>
         <div
@@ -486,12 +572,17 @@ const codecLabel = (codec: string): string => {
         <span>24</span>
       </div>
       <p v-if="hourlyTotal > 0 && peakHour" class="text-center text-xs text-on-surface-variant/55">
-        {{
-          t("stats.favoriteHour", {
-            hour: String(peakHour.hour).padStart(2, "0"),
-            count: peakHour.playCount,
-          })
-        }}
+        <span v-if="activeHourlyItem?.isHovered" class="text-primary font-medium">
+          {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00 · {{ t("stats.plays", { count: activeHourlyItem.playCount }, activeHourlyItem.playCount) }}
+        </span>
+        <span v-else>
+          {{
+            t("stats.favoriteHour", {
+              hour: String(peakHour.hour).padStart(2, "0"),
+              count: peakHour.playCount,
+            })
+          }}
+        </span>
       </p>
     </SCard>
 

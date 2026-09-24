@@ -1,6 +1,6 @@
 {
   "name": "splayer-web-workspace",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev:web": "pnpm --filter splayer-web dev",

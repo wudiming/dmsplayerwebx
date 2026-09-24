@@ -113,6 +113,48 @@ export const useStatusStore = defineStore(
       commentsOpen.value = true;
     };
 
+    /** 重置全部播放状态 */
+    const $reset = (): void => {
+      state.value = "idle";
+      position.value = 0;
+      duration.value = 0;
+      volume.value = 1;
+      currentSource.value = null;
+      outputDevices.value = [];
+      trackLoading.value = false;
+      isPlayerExpanded.value = false;
+      outerQueueOpen.value = false;
+      fullQueueOpen.value = false;
+      searchOpen.value = false;
+      commentsOpen.value = false;
+      commentsTrack.value = null;
+      showLyric.value = true;
+      playIndex.value = -1;
+      repeatMode.value = "list";
+      shuffleMode.value = "off";
+      heartMode.value = false;
+      fmMode.value = false;
+      fmOptions.value = { mode: "DEFAULT" };
+      speed.value = 1.0;
+      pitch.value = 0;
+      pitchSync.value = true;
+      autoClose.enable = false;
+      autoClose.duration = 30;
+      autoClose.endTime = 0;
+      autoClose.waitSongEnd = false;
+      autoClose.remainTime = 0;
+      abLoop.enable = false;
+      abLoop.pointA = null;
+      abLoop.pointB = null;
+      lyricOffsetMs.value = 0;
+      searchPlatform.value = "netease";
+      myPlaylistSource.value = "online";
+      likedPageTab.value = "online";
+      settingsCategory.value = "";
+      sortField.value = "none";
+      sortOrder.value = "asc";
+    };
+
     return {
       state,
       position,
@@ -153,6 +195,7 @@ export const useStatusStore = defineStore(
       currentTrack,
       currentPlaybackContext,
       showComments,
+      $reset,
     };
   },
   {

@@ -74,19 +74,16 @@ const overviewCards = computed<OverviewCard[]>(() => {
       key: "songs",
       icon: IconLucideMusic,
       value: stats ? String(stats.trackCount) : "--",
-      to: "/library",
     },
     {
       key: "albums",
       icon: IconLucideDisc3,
       value: stats ? String(stats.albumCount) : "--",
-      to: "/albums/local",
     },
     {
       key: "artists",
       icon: IconLucideMic2,
       value: stats ? String(stats.artistCount) : "--",
-      to: "/artists/local",
     },
     {
       key: "totalPlays",

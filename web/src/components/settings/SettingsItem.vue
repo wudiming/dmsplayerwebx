@@ -16,14 +16,24 @@ const model = props.item.binding ? useSettingModel(props.item.binding) : ref<any
 const applyChange = async (next: unknown): Promise<void> => {
   const cfg = props.item.confirm;
   if (cfg && (!cfg.when || cfg.when(next))) {
+    const content = cfg.getContent
+      ? cfg.getContent(next)
+      : (cfg.contentKey ? t(cfg.contentKey) : "");
     const confirmed = await dialog.confirm({
       title: cfg.titleKey ? t(cfg.titleKey) : undefined,
-      content: t(cfg.contentKey),
+      content,
       type: cfg.type ?? "warning",
       confirmText: cfg.confirmTextKey ? t(cfg.confirmTextKey) : undefined,
       cancelText: cfg.cancelTextKey ? t(cfg.cancelTextKey) : undefined,
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+      const cur = model.value;
+      model.value = undefined;
+      nextTick(() => {
+        model.value = cur;
+      });
+      return;
+    }
   }
   model.value = next;
   await props.item.action?.(next);

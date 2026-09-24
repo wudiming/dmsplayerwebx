@@ -130,6 +130,22 @@ export const useThemeStore = defineStore(
       );
     };
 
+    /** 重置主题回默认值 */
+    const $reset = (): void => {
+      mode.value = "system";
+      source.value = "default";
+      customColor.value = DEFAULT_PRIMARY;
+      globalTint.value = false;
+      coverColor.value = null;
+      appearanceStyle.value = "solid";
+      imageBackground.src = "";
+      imageBackground.blur = 0;
+      imageBackground.dim = 0.4;
+      imageBackground.scale = 1.2;
+      imageBackgroundColor.value = null;
+      apply();
+    };
+
     return {
       mode,
       source,
@@ -146,6 +162,7 @@ export const useThemeStore = defineStore(
       setCustomColor,
       setSource,
       init,
+      $reset,
     };
   },
   {

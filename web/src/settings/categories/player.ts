@@ -16,13 +16,13 @@ const playerCategory: SettingCategory = {
           key: "autoPlay",
           type: "switch",
           binding: { store: "settings", path: "system.player.autoPlay" },
-          defaultValue: true,
+          defaultValue: false,
         },
         {
           key: "rememberLastTrack",
           type: "switch",
           binding: { store: "settings", path: "system.player.rememberLastTrack" },
-          defaultValue: false,
+          defaultValue: true,
         },
         {
           key: "searchPlayBehavior",

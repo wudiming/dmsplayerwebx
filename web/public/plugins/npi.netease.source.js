@@ -3,16 +3,15 @@
  * @id          npi.netease.source
  * @version     1.0.0
  * @description 基于 NeteaseCloudMusicApi Enhanced 自建服务的音源插件，支持播放地址解析（含解灰）、歌词、封面、评论兜底
- * @author      you
- * @homepage    https://npi.881128.xyz
+ * @author      Community
  * @type        source
  * @apiLevel    3
  */
 
 // ============================================================
-// 配置区：改成你自己的自建服务地址（结尾不要带 /）
+// 配置区：请配置为您自建的服务地址（结尾不要带 /）
 // ============================================================
-const BASE_URL = "https://npi.881128.xyz";
+const BASE_URL = "";
 
 // 请求超时（毫秒）
 const REQUEST_TIMEOUT = 15000;

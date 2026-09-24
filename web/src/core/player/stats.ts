@@ -49,7 +49,12 @@ const begin = (track: Track, playing: boolean): void => {
 const finalize = (): void => {
   if (!session) return;
   settle();
-  const { track, startedAt, listenedMs } = session;
+  const currentMediaTrack = useMediaStore().track;
+  const track =
+    currentMediaTrack && trackKey(currentMediaTrack) === trackKey(session.track)
+      ? currentMediaTrack
+      : session.track;
+  const { startedAt, listenedMs } = session;
   session = null;
   if (listenedMs < MIN_RECORD_MS) return;
   window.api.stats.recordPlay({ track, startedAt, listenedMs });

@@ -6,7 +6,7 @@ import { isExternalUrl, openExternal } from "@/utils/url";
 defineOptions({ inheritAttrs: false });
 
 /** 插件开发文档地址 */
-const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
+const DOCS_URL = "";
 
 const { t } = useI18n();
 const pluginsStore = usePluginsStore();
@@ -72,6 +72,7 @@ const handleImportFromUrl = async (): Promise<void> => {
         <div class="text-sm text-on-surface-variant/70 mt-0.5 flex items-center gap-1 flex-wrap">
           <span>{{ t("settings.plugins.hintDetail") }}</span>
           <a
+            v-if="DOCS_URL"
             class="text-primary cursor-pointer hover:underline inline-flex items-center gap-0.5"
             @click="openExternal(DOCS_URL)"
           >

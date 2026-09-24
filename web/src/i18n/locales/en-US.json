@@ -17,8 +17,8 @@
     "finish": "Finish",
     "footer": "You can adjust anything skipped here anytime in Settings",
     "welcome": {
-      "title": "Welcome to SPlayer-Next",
-      "subtitle": "A modern desktop music player — a few quick steps and you're ready",
+      "title": "Welcome to SPlayer Web",
+      "subtitle": "A modern music player — a few quick steps and you're ready",
       "start": "Get Started",
       "features": {
         "local": {
@@ -35,7 +35,7 @@
         },
         "lyrics": {
           "title": "Rich Lyrics",
-          "desc": "AMLL word-by-word lyrics, plus desktop, Dynamic Island and taskbar lyrics"
+          "desc": "AMLL word-by-word lyrics, full-screen player and visual effects"
         }
       }
     },
@@ -48,7 +48,7 @@
     },
     "library": {
       "title": "Local Music Library",
-      "subtitle": "Add folders to scan and SPlayer-Next will index them automatically. You can add more later."
+      "subtitle": "Add folders to scan and SPlayer Web will index them automatically. You can add more later."
     },
     "streaming": {
       "title": "Streaming Servers",
@@ -70,7 +70,7 @@
     },
     "hotkeys": {
       "title": "Keyboard Shortcuts",
-      "subtitle": "SPlayer-Next ships with complete playback shortcuts you can use whenever you need them.",
+      "subtitle": "SPlayer Web ships with complete playback shortcuts you can use whenever you need them.",
       "tips": {
         "global": {
           "title": "Global shortcuts",
@@ -1911,7 +1911,10 @@
       "confirmTitle": "Restore settings and relaunch?",
       "confirmDesc": "Your current settings will be overwritten by the backup file, and the app will relaunch immediately to apply them. Local library, playlists and playback history are not affected.",
       "invalid": "Invalid backup file",
-      "failed": "Restore failed"
+      "failed": "Restore failed",
+      "parseFailed": "Failed to parse backup file",
+      "invalidFormat": "Invalid backup file format",
+      "success": "Settings restored successfully, reloading..."
     },
     "resetSettings": {
       "label": "Reset Settings",
@@ -1919,7 +1922,8 @@
       "button": "Reset",
       "confirmTitle": "Reset settings?",
       "confirmDesc": "All settings will be restored to their defaults. This cannot be undone.",
-      "done": "Settings have been reset"
+      "done": "Settings have been reset",
+      "failed": "Failed to reset settings"
     },
     "resetAll": {
       "label": "Clear All Data",
@@ -1927,7 +1931,8 @@
       "button": "Clear",
       "confirmTitle": "Clear all data?",
       "confirmDesc": "All playlists, sign-in state and caches will be wiped and settings reset. This cannot be undone.",
-      "done": "All data has been cleared"
+      "done": "All data has been cleared",
+      "failed": "Failed to clear all data"
     },
     "plugins": {
       "securityWarningTitle": "Mind the security risks before installing",
@@ -2090,7 +2095,13 @@
       "description": "How downloaded files are named",
       "titleOnly": "Title",
       "artistTitle": "Artist - Title",
-      "titleArtist": "Title - Artist"
+      "titleArtist": "Title - Artist",
+      "confirmTitle": "Redundant Filename Format Notice",
+      "confirmArtistDesc": "Smart foldering by \"By artist\" is currently enabled, and songs are already organized into artist directories. Including the artist name in the filename may cause redundancy. Are you sure you want to use this format?",
+      "confirmArtistAlbumDesc": "Smart foldering by \"By artist / album\" is currently enabled, and songs are already organized into artist and album directories. Including the artist name in the filename may cause redundancy. Are you sure you want to use this format?",
+      "confirmUse": "Use Anyway",
+      "keepTitleOnly": "Keep Title Only",
+      "autoAdjustedNotice": "Smart foldering enabled. Filename format has been automatically set to \"Title\"."
     },
     "downloadFolderScheme": {
       "label": "Smart Foldering",
