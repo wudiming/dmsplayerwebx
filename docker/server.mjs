@@ -1,7 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 5173;
@@ -16,13 +16,16 @@ try {
   ];
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
-      const mod = await import(`file://${p.replace(/\\/g, "/")}`);
+      const mod = await import(pathToFileURL(p).href);
       handleApiRequest = mod.handleApiRequest;
       break;
     }
   }
+  if (!handleApiRequest) {
+    console.error("[SPlayer Web] CRITICAL: Backend handler file not found in paths:", possiblePaths);
+  }
 } catch (e) {
-  console.warn("[SPlayer Web] Failed to load backend handler:", e);
+  console.error("[SPlayer Web] CRITICAL: Failed to load backend handler:", e);
 }
 
 const MIME_TYPES = {
@@ -76,6 +79,10 @@ const server = http.createServer((req, res) => {
       handleApiRequest(req, res);
       return;
     }
+
+    res.writeHead(503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: false, error: "Backend handler not loaded" }));
+    return;
   }
 
   // Handle /plugins/ requests
