@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 5173;
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, "../dist");
-const PLUGIN_DIR = process.env.PLUGIN_DIR || path.join(__dirname, "../plugins");
+const PLUGIN_DIR = process.env.PLUGIN_DIR || path.join(DIST_DIR, "plugins");
 
 let handleApiRequest = null;
 try {
@@ -129,5 +129,4 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[SPlayer Web] Server running on http://0.0.0.0:${PORT}`);
   console.log(`[SPlayer Web] Serving from: ${DIST_DIR}`);
-  console.log(`[SPlayer Web] Plugin directory: ${PLUGIN_DIR}`);
 });

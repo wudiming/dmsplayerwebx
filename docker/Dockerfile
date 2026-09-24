@@ -37,16 +37,12 @@ RUN apk add --no-cache ca-certificates tzdata
 ENV NODE_ENV=production
 ENV PORT=5173
 ENV DIST_DIR=/app/dist
-ENV PLUGIN_DIR=/app/plugins
 
 # Create directories
-RUN mkdir -p /app/dist /app/plugins /app/scripts
+RUN mkdir -p /app/dist /app/scripts
 
-# Copy production bundle from builder
+# Copy production bundle from builder (includes static plugins in dist/plugins)
 COPY --from=builder /build/web/dist /app/dist
-
-# Copy pre-packaged plugin
-COPY web/public/plugins/npi.netease.source.js /app/plugins/npi.netease.source.js
 
 # Copy runtime scripts and backend bundle
 COPY --from=builder /build/server/dist/handler.mjs /app/scripts/handler.mjs
@@ -59,4 +55,3 @@ RUN chmod +x /app/docker-entrypoint.sh
 EXPOSE 5173
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-

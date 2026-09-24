@@ -81,12 +81,6 @@ services:
       - TZ=Asia/Shanghai
       # 【可选】自建网易云音乐增强版音源服务地址 (用于解灰与无损音源解析)
       # - NETEASE_ENHANCED_URL=http://your-ncm-api:3000
-    volumes:
-      - splayer-plugins:/app/plugins
-
-volumes:
-  splayer-plugins:
-    driver: local
 ```
 
 2. 启动服务：
