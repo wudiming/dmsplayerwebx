@@ -265,39 +265,33 @@ const heatRows = computed(() => {
 });
 
 /**
- * 格式化毫秒为直观时长描述
+ * 格式化毫秒为精简时长描述（h / m 极简呈现）
  * @param ms - 毫秒数
  */
 const formatDurationText = (ms: number): string => {
-  const isZh = locale.value?.startsWith("zh");
   const totalMin = Math.round(ms / 60000);
-  if (totalMin < 1) return isZh ? "< 1 分钟" : "< 1 min";
+  if (totalMin < 1) return "< 1m";
   const hours = Math.floor(totalMin / 60);
   const minutes = totalMin % 60;
-  if (isZh) {
-    if (hours === 0) return `${minutes} 分钟`;
-    if (minutes === 0) return `${hours} 小时`;
-    return `${hours} 小时 ${minutes} 分钟`;
-  }
   if (hours === 0) return `${minutes}m`;
   if (minutes === 0) return `${hours}h`;
   return `${hours}h ${minutes}m`;
 };
 
 /**
- * 生成格子提示文本
- * @param cell - 格子数据，空占位为 null
- * @returns 日期 + 时长 + 播放首数
+ * 生成格子简明收听描述（化繁为简：时长 + 次数）
+ * @param cell - 格子数据
  */
-const dayTooltip = (cell: HeatCell | null): string => {
+const cellSummary = (cell: HeatCell | null): string => {
   if (!cell) return "";
-  if (cell.isFuture) return cell.day;
+  const isZh = locale.value?.startsWith("zh");
+  if (cell.isFuture) return isZh ? "未到" : "Upcoming";
   if (cell.listenedMs <= 0 && cell.playCount <= 0) {
-    return `${cell.day} · ${t("stats.noPlayHistory")}`;
+    return isZh ? "0次" : "0 plays";
   }
   const durStr = formatDurationText(cell.listenedMs);
-  const playStr = t("stats.plays", { count: cell.playCount }, cell.playCount);
-  return `${cell.day} · ${durStr} · ${playStr}`;
+  const playStr = isZh ? `${cell.playCount}次` : `${cell.playCount} plays`;
+  return `${durStr} · ${playStr}`;
 };
 
 const hourlyMax = computed(() => Math.max(0, ...props.hourly.map((item) => item.playCount)));
@@ -567,10 +561,12 @@ const codecLabel = (codec: string): string => {
             <STooltip
               v-for="(cell, weekIdx) in row.cells"
               :key="weekIdx"
-              :content="dayTooltip(cell)"
               :disabled="!cell"
+              :delay="40"
+              :side-offset="6"
               side="top"
               align="center"
+              content-class="pointer-events-none z-50 whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-center font-semibold text-on-primary tabular-nums shadow-md"
             >
               <div
                 class="w-full aspect-square rounded-[2px] transition-transform duration-100"
@@ -583,6 +579,18 @@ const codecLabel = (codec: string): string => {
                 "
                 :style="cell ? cellStyle(cell) : {}"
               />
+              <template #content>
+                <div v-if="cell" class="text-center">
+                  <span
+                    class="block whitespace-nowrap text-[9px] font-medium leading-none text-on-primary/80"
+                  >
+                    {{ cell.day }}
+                  </span>
+                  <span class="mt-1 block whitespace-nowrap text-xs font-bold leading-none">
+                    {{ cellSummary(cell) }}
+                  </span>
+                </div>
+              </template>
             </STooltip>
           </template>
         </div>
@@ -620,7 +628,7 @@ const codecLabel = (codec: string): string => {
       </div>
 
       <div
-        class="relative min-h-0 flex-1 cursor-crosshair select-none"
+        class="relative min-h-0 flex-1 cursor-default select-none"
         @mousemove="onHourlyMouseMove"
         @mouseleave="onHourlyMouseLeave"
       >
@@ -693,7 +701,7 @@ const codecLabel = (codec: string): string => {
             {{ t("stats.listeningHours") }}
           </span>
           <span class="mt-1 block whitespace-nowrap text-xs font-bold leading-none">
-            {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00 · {{ activeHourlyItem.playCount }} {{ t("stats.playsUnit") }}
+            {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00 · {{ activeHourlyItem.playCount }}{{ t("stats.playsUnit") }}
           </span>
         </div>
 

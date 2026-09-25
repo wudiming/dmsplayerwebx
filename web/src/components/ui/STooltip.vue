@@ -4,7 +4,7 @@ import { usePopupZIndex } from "@/composables/useZIndex";
 withDefaults(
   defineProps<{
     /** 提示文本 */
-    content: string;
+    content?: string;
     /** 弹出位置 */
     side?: "top" | "right" | "bottom" | "left";
     /** 对齐方式 */
@@ -15,13 +15,17 @@ withDefaults(
     delay?: number;
     /** 是否禁用 */
     disabled?: boolean;
+    /** 自定义弹出框 class */
+    contentClass?: string;
   }>(),
   {
+    content: "",
     side: "top",
     align: "center",
     sideOffset: 6,
     delay: 100,
     disabled: false,
+    contentClass: "",
   },
 );
 
@@ -42,9 +46,15 @@ const { zIndex, onOpenChange } = usePopupZIndex();
           :avoid-collisions="true"
           :collision-padding="12"
           :style="{ zIndex }"
-          class="px-3 py-2 rounded-lg bg-surface-bright shadow-lg text-sm text-on-surface data-[state=delayed-open]:animate-popover-in data-[state=closed]:animate-popover-out"
+          :class="[
+            contentClass ||
+              'px-3 py-2 rounded-lg bg-surface-bright shadow-lg text-sm text-on-surface',
+            'data-[state=delayed-open]:animate-popover-in data-[state=closed]:animate-popover-out',
+          ]"
         >
-          {{ content }}
+          <slot name="content">
+            {{ content }}
+          </slot>
         </TooltipContent>
       </TooltipPortal>
     </TooltipRoot>
