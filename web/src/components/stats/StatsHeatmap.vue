@@ -29,6 +29,13 @@ interface ChartPoint {
   y: number;
 }
 
+interface BezierSegment {
+  p0: ChartPoint;
+  cp1: ChartPoint;
+  cp2: ChartPoint;
+  p1: ChartPoint;
+}
+
 interface CodecVisual {
   id: string;
   codec: string;
@@ -136,44 +143,63 @@ const activeDaysCount = computed(() => {
   return count;
 });
 
-/** 15分钟、1小时、2小时、3小时（毫秒） */
-const MS_15_MIN = 15 * 60 * 1000;
+/** 10分钟、30分钟、1小时、1.5小时、2小时（毫秒） */
+const MS_10_MIN = 10 * 60 * 1000;
+const MS_30_MIN = 30 * 60 * 1000;
 const MS_1_HOUR = 60 * 60 * 1000;
-const MS_2_HOUR = 2 * 60 * 60 * 1000;
-const MS_3_HOUR = 3 * 60 * 60 * 1000;
+const MS_1_5_HOUR = 90 * 60 * 1000;
+const MS_2_HOUR = 120 * 60 * 1000;
 
-/** 5 级颜色深浅阶梯 (0 级底色 0.06，1~4 级从少到多逐步加深) */
-const HEATMAP_LEVEL_ALPHAS = [0.06, 0.25, 0.48, 0.72, 0.95];
+/** 未到日期（未来）的占位底色（浅色色块平铺占位） */
+const FUTURE_PLACEHOLDER_BG = "rgb(var(--s-primary) / 0.05)";
+
+/** 5 级颜色深浅阶梯 (少 -> 多，与无收听空心线框形成鲜明对比) */
+const HEATMAP_LEVEL_ALPHAS = [0.28, 0.46, 0.64, 0.82, 1.0];
 
 /**
- * 按收听时长映射基础背景色（0级: <15m, 1级: 15m~1h, 2级: 1h~2h, 3级: 2h~3h, 4级: >3h）
+ * 按收听时长映射基础背景色（0级: <10m 用空心线框; 1级: 10m~30m, 2级: 30m~1h, 3级: 1h~1.5h, 4级: 1.5h~2h, 5级: >2h）
  * @param listenedMs - 收听时长（毫秒）
- * @returns 背景色样式
+ * @returns 样式对象
  */
 const colorFromDuration = (listenedMs: number): Record<string, string> => {
-  if (listenedMs < MS_15_MIN) {
-    return { backgroundColor: `rgb(var(--s-primary) / ${HEATMAP_LEVEL_ALPHAS[0]})` };
+  if (listenedMs < MS_10_MIN) {
+    return {
+      backgroundColor: "transparent",
+      border: "1px solid rgb(var(--s-on-surface) / 0.16)",
+      boxSizing: "border-box",
+    };
   }
-  let alpha = HEATMAP_LEVEL_ALPHAS[1];
-  if (listenedMs > MS_3_HOUR) {
+  let alpha = HEATMAP_LEVEL_ALPHAS[0];
+  if (listenedMs >= MS_2_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[4];
-  } else if (listenedMs > MS_2_HOUR) {
+  } else if (listenedMs >= MS_1_5_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[3];
-  } else if (listenedMs > MS_1_HOUR) {
+  } else if (listenedMs >= MS_1_HOUR) {
     alpha = HEATMAP_LEVEL_ALPHAS[2];
+  } else if (listenedMs >= MS_30_MIN) {
+    alpha = HEATMAP_LEVEL_ALPHAS[1];
   }
-  return { backgroundColor: `rgb(var(--s-primary) / ${alpha})` };
+  return {
+    backgroundColor: `rgb(var(--s-primary) / ${alpha})`,
+    border: "1px solid transparent",
+    boxSizing: "border-box",
+  };
 };
 
 /**
- * 格子样式，未来日期显示为轻微淡化的底色以保持整体网格结构完整
+ * 格子样式：
+ * - 没到的日子（未来）：浅色色块占位
+ * - 过去的日子（无收听）：中性空心线框
+ * - 过去的日子（有收听）：从少到多的 5 级鲜明主题色块
  * @param cell - 格子数据
  * @returns 样式对象
  */
 const cellStyle = (cell: HeatCell): Record<string, string> => {
   if (cell.isFuture) {
     return {
-      backgroundColor: "rgb(var(--s-primary) / 0.03)",
+      backgroundColor: FUTURE_PLACEHOLDER_BG,
+      border: "1px solid transparent",
+      boxSizing: "border-box",
     };
   }
   return colorFromDuration(cell.listenedMs);
@@ -282,77 +308,172 @@ const peakHour = computed(() =>
     null,
   ),
 );
-/** 播放时段折线坐标 */
-const hourlyPoints = computed<ChartPoint[]>(() =>
-  Array.from({ length: 24 }, (_, hour) => {
-    const count = props.hourly.find((item) => item.hour === hour)?.playCount ?? 0;
-    const ratio = hourlyMax.value ? count / hourlyMax.value : 0;
-    return {
-      x: (hour / 23) * 240,
-      y: 120 - ratio * 104,
-    };
-  }),
+
+/**
+ * 24 小时连续高斯核密度估计（Gaussian KDE）流动波形：
+ * - 结合小时参考容量（保底 10 首）避免生硬断崖，高程温润舒展；
+ * - 产生数学上无限阶连续可导（C^∞）的纯净流体波浪；
+ * - 彻底根除任何阶梯折角、平台平顶与离散机械感，达到终极视觉顺滑。
+ */
+const HOURLY_REFERENCE_CAPACITY = 10;
+const hourlyReferenceMax = computed(() =>
+  Math.max(HOURLY_REFERENCE_CAPACITY, Math.ceil(hourlyMax.value * 1.15)),
 );
+
+const MAX_CHART_AMPLITUDE = 60;
+const KDE_SIGMA = 0.85;
+
+const kdeValueAt = (hour: number): number => {
+  let sum = 0;
+  for (const item of props.hourly) {
+    if (item.playCount > 0) {
+      const d = hour - item.hour;
+      sum += item.playCount * Math.exp(-(d * d) / (2 * KDE_SIGMA * KDE_SIGMA));
+    }
+  }
+  return sum;
+};
+
+const maxKde = computed(() => {
+  if (hourlyTotal.value === 0) return 0;
+  let max = 0;
+  const samples = 100;
+  for (let i = 0; i <= samples; i++) {
+    const h = (i / samples) * 23;
+    const v = kdeValueAt(h);
+    if (v > max) max = v;
+  }
+  return max;
+});
+
+const kdePeakHeight = computed(() => {
+  if (hourlyReferenceMax.value <= 0) return 0;
+  return (hourlyMax.value / hourlyReferenceMax.value) * MAX_CHART_AMPLITUDE;
+});
+
+const kdeYAt = (hour: number): number => {
+  if (hourlyTotal.value === 0 || maxKde.value <= 0) return 118;
+  const v = kdeValueAt(hour);
+  const ratio = v / maxKde.value;
+  // 底部极微小外延平滑贴地归零
+  if (ratio <= 0.008) return 118;
+  return 118 - ratio * kdePeakHeight.value;
+};
+
+/** 64 点高密度连续采样，生成极致顺滑的流动波形 */
+const kdeSamples = computed<ChartPoint[]>(() => {
+  if (hourlyTotal.value === 0 || maxKde.value <= 0) {
+    return [
+      { x: 0, y: 118 },
+      { x: 240, y: 118 },
+    ];
+  }
+  const samples = 64;
+  const pts: ChartPoint[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const h = (i / samples) * 23;
+    pts.push({
+      x: (i / samples) * 240,
+      y: kdeYAt(h),
+    });
+  }
+  return pts;
+});
+
+/** 极致顺滑的 SVG 路径 */
+const hourlyLinePath = computed(() => {
+  const pts = kdeSamples.value;
+  if (pts.length < 2) return "";
+  let path = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return path;
+});
+
+const hourlyAreaPath = computed(() => `${hourlyLinePath.value} L 240 118 L 0 118 Z`);
+
+/** 24 个时段在连续高斯流动曲线上严格对应的锚点 */
+const hourlyPoints = computed<ChartPoint[]>(() =>
+  Array.from({ length: 24 }, (_, hour) => ({
+    x: (hour / 23) * 240,
+    y: kdeYAt(hour),
+  })),
+);
+
 const hoveredHour = ref<number | null>(null);
 
 const activeHourlyItem = computed(() => {
-  if (hoveredHour.value !== null) {
-    const item = props.hourly.find((h) => h.hour === hoveredHour.value);
-    return {
-      hour: hoveredHour.value,
-      playCount: item?.playCount ?? 0,
-      isHovered: true,
-    };
-  }
-  if (peakHour.value) {
-    return {
-      hour: peakHour.value.hour,
-      playCount: peakHour.value.playCount,
-      isHovered: false,
-    };
-  }
-  return null;
+  if (hoveredHour.value === null) return null;
+  const item = props.hourly.find((h) => h.hour === hoveredHour.value);
+  return {
+    hour: hoveredHour.value,
+    playCount: item?.playCount ?? 0,
+    isHovered: true,
+  };
 });
 
 const activePoint = computed(() =>
   activeHourlyItem.value ? hourlyPoints.value[activeHourlyItem.value.hour] : null,
 );
-const activeLabelX = computed(() => Math.min(208, Math.max(32, activePoint.value?.x ?? 0)));
-const activeLabelY = computed(() => {
-  const py = activePoint.value?.y ?? 120;
-  return py < 40 ? py + 24 : py - 20;
-});
 
+const peakPoint = computed(() =>
+  peakHour.value ? hourlyPoints.value[peakHour.value.hour] : null,
+);
+
+const activeLabelX = computed(() => Math.min(208, Math.max(32, activePoint.value?.x ?? 0)));
+/** 优化悬浮色块位置：固定在图表顶部空旷优雅区（y: 18），跟随 X 轴滑动，不与曲线和圆点粘连 */
+const activeLabelY = computed(() => 18);
+
+/**
+ * 命中检测：高精度计算鼠标到高斯连续流动曲线的实际几何距离
+ * 仅当鼠标靠近曲线轨迹或对应锚点时才判定为在线上，激活悬浮提示；在上方或空白区域时不触发。
+ */
 const onHourlyMouseMove = (e: MouseEvent): void => {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  if (rect.width <= 0) return;
+  if (rect.width <= 0 || rect.height <= 0) return;
   const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-  const hour = Math.round((x / rect.width) * 23);
-  hoveredHour.value = Math.max(0, Math.min(23, hour));
+  const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+  // 映射到 SVG 坐标系 (240 x 128)
+  const svgX = (x / rect.width) * 240;
+  const svgY = (y / rect.height) * 128;
+
+  const hourFloat = (svgX / 240) * 23;
+  const hourIdx = Math.round(hourFloat);
+  const clampedHour = Math.max(0, Math.min(23, hourIdx));
+
+  // 计算连续高斯曲线在当前 svgX 处的真实高程
+  const lineY = kdeYAt(hourFloat);
+
+  // 垂直距离与到最近锚点的几何距离
+  const distY = Math.abs(svgY - lineY);
+  const targetPoint = hourlyPoints.value[clampedHour];
+  const distPoint = targetPoint
+    ? Math.hypot(svgX - targetPoint.x, svgY - targetPoint.y)
+    : Infinity;
+
+  // 鼠标距离曲线不超过 16px 或靠近锚点 20px 时激活悬停
+  if (distY <= 16 || distPoint <= 20) {
+    hoveredHour.value = clampedHour;
+  } else {
+    hoveredHour.value = null;
+  }
 };
 
 const onHourlyMouseLeave = (): void => {
   hoveredHour.value = null;
 };
-
-/** 使用 Catmull-Rom 转贝塞尔曲线平滑连接相邻时段 */
-const hourlyLinePath = computed(() => {
-  const points = hourlyPoints.value;
-  if (points.length === 0) return "";
-  let path = `M ${points[0].x} ${points[0].y}`;
-  for (let index = 0; index < points.length - 1; index++) {
-    const p0 = points[Math.max(0, index - 1)];
-    const p1 = points[index];
-    const p2 = points[index + 1];
-    const p3 = points[Math.min(points.length - 1, index + 2)];
-    const control1Y = Math.min(120, Math.max(8, p1.y + (p2.y - p0.y) / 6));
-    const control2Y = Math.min(120, Math.max(8, p2.y - (p3.y - p1.y) / 6));
-    path += ` C ${p1.x + (p2.x - p0.x) / 6} ${control1Y}, ${p2.x - (p3.x - p1.x) / 6} ${control2Y}, ${p2.x} ${p2.y}`;
-  }
-  return path;
-});
-
-const hourlyAreaPath = computed(() => `${hourlyLinePath.value} L 240 124 L 0 124 Z`);
 
 const codecs = computed(() => (props.stats?.codecs ?? []).filter((item) => item.codec.trim()));
 const chartCodecs = computed(() => codecs.value.slice(0, 4));
@@ -504,30 +625,52 @@ const codecLabel = (codec: string): string => {
         @mouseleave="onHourlyMouseLeave"
       >
         <svg class="absolute inset-0 size-full pointer-events-none" viewBox="0 0 240 128" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="hourlyAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgb(var(--s-primary))" stop-opacity="0.22" />
+              <stop offset="100%" stop-color="rgb(var(--s-primary))" stop-opacity="0.02" />
+            </linearGradient>
+          </defs>
           <template v-if="!loading && hourlyTotal > 0">
-            <path :d="hourlyAreaPath" fill="rgb(var(--s-primary) / 0.08)" />
+            <path :d="hourlyAreaPath" fill="url(#hourlyAreaGrad)" />
             <path
               :d="hourlyLinePath"
               fill="none"
               stroke="rgb(var(--s-primary))"
-              stroke-width="2"
+              stroke-width="2.5"
               stroke-linecap="round"
               stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+            />
+            <!-- 悬停指示参考细虚线 (高精度发丝级 SVG 细虚线，轻柔精致) -->
+            <line
+              v-if="activePoint && hoveredHour !== null"
+              :x1="activePoint.x"
+              y1="6"
+              :x2="activePoint.x"
+              y2="118"
+              stroke="rgb(var(--s-primary))"
+              stroke-width="1"
+              stroke-dasharray="2 3"
+              stroke-opacity="0.32"
               vector-effect="non-scaling-stroke"
             />
           </template>
         </svg>
 
-        <!-- 悬停指示参考竖线 -->
+        <!-- 静态常驻最高峰值点（未悬停时静默呈现） -->
         <div
-          v-if="!loading && hourlyTotal > 0 && activePoint && activeHourlyItem?.isHovered"
-          class="pointer-events-none absolute top-1 bottom-1 w-px -translate-x-1/2 border-l border-dashed border-primary/40 transition-[left] duration-75"
-          :style="{ left: `${(activePoint.x / 240) * 100}%` }"
+          v-if="!loading && hourlyTotal > 0 && peakPoint && hoveredHour === null"
+          class="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/70 ring-2 ring-surface-panel shadow-sm"
+          :style="{
+            left: `${(peakPoint.x / 240) * 100}%`,
+            top: `${(peakPoint.y / 128) * 100}%`,
+          }"
         />
 
-        <!-- 当前指示点（最高点或悬停点） -->
+        <!-- 当前指示点（仅在鼠标在线上悬停时显示） -->
         <div
-          v-if="!loading && hourlyTotal > 0 && activePoint"
+          v-if="!loading && hourlyTotal > 0 && activePoint && hoveredHour !== null"
           class="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary ring-2 ring-surface-panel shadow-sm transition-[left,top] duration-75"
           :style="{
             left: `${(activePoint.x / 240) * 100}%`,
@@ -535,10 +678,10 @@ const codecLabel = (codec: string): string => {
           }"
         />
 
-        <!-- 当前时段提示气泡 -->
+        <!-- 当前时段提示气泡（仅在鼠标在线上悬停时显示，在空白区域不显示） -->
         <div
-          v-if="!loading && hourlyTotal > 0 && activeHourlyItem"
-          class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-primary px-2 py-1 text-center text-[10px] font-semibold text-on-primary tabular-nums shadow-md transition-[left,top] duration-75"
+          v-if="!loading && hourlyTotal > 0 && activeHourlyItem && hoveredHour !== null"
+          class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-center text-[10px] font-semibold text-on-primary tabular-nums shadow-md transition-[left,top] duration-75"
           :style="{
             left: `${(activeLabelX / 240) * 100}%`,
             top: `${(activeLabelY / 128) * 100}%`,
@@ -547,15 +690,13 @@ const codecLabel = (codec: string): string => {
           <span
             class="block whitespace-nowrap text-[9px] font-medium leading-none text-on-primary/80"
           >
-            {{ activeHourlyItem.isHovered ? t("stats.listeningHours") : t("stats.peakListening") }}
+            {{ t("stats.listeningHours") }}
           </span>
           <span class="mt-1 block whitespace-nowrap text-xs font-bold leading-none">
-            {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00
-            <template v-if="activeHourlyItem.isHovered">
-              · {{ activeHourlyItem.playCount }} {{ t("stats.playsUnit") }}
-            </template>
+            {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00 · {{ activeHourlyItem.playCount }} {{ t("stats.playsUnit") }}
           </span>
         </div>
+
         <div
           v-if="!loading && hourlyTotal === 0"
           class="absolute inset-0 flex items-center justify-center text-sm text-on-surface-variant/40"
@@ -572,7 +713,7 @@ const codecLabel = (codec: string): string => {
         <span>24</span>
       </div>
       <p v-if="hourlyTotal > 0 && peakHour" class="text-center text-xs text-on-surface-variant/55">
-        <span v-if="activeHourlyItem?.isHovered" class="text-primary font-medium">
+        <span v-if="hoveredHour !== null && activeHourlyItem" class="text-primary font-medium">
           {{ String(activeHourlyItem.hour).padStart(2, "0") }}:00 · {{ t("stats.plays", { count: activeHourlyItem.playCount }, activeHourlyItem.playCount) }}
         </span>
         <span v-else>

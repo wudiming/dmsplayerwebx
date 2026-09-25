@@ -23,7 +23,7 @@ const topAlbums = shallowRef<TopAlbum[]>([]);
 const topArtists = shallowRef<TopArtist[]>([]);
 const loading = ref(true);
 
-onMounted(async () => {
+const refreshStats = async (): Promise<void> => {
   try {
     const [library, summary, history, hourlyHistory, songs, albums, artists] = await Promise.all([
       window.api.stats.getLibraryStats(),
@@ -44,6 +44,30 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+};
+
+onMounted(() => {
+  void refreshStats();
+
+  let timer: number | null = null;
+  const debouncedRefresh = (): void => {
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      void refreshStats();
+    }, 300);
+  };
+
+  window.addEventListener("splayer:stats-changed", debouncedRefresh);
+  const onVisibility = (): void => {
+    if (document.visibilityState === "visible") void refreshStats();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+
+  onUnmounted(() => {
+    if (timer) window.clearTimeout(timer);
+    window.removeEventListener("splayer:stats-changed", debouncedRefresh);
+    document.removeEventListener("visibilitychange", onVisibility);
+  });
 });
 </script>
 

@@ -2241,6 +2241,7 @@
     "losslessRatio": "无损占比",
     "trackUnit": "首",
     "listeningHours": "播放时段",
+    "peakBadge": "最活跃",
     "peakListening": "最常播放",
     "favoriteHour": "你最喜欢在 {hour}:00 听歌，共计 {count} 首",
     "noPlayHistory": "暂无播放时段数据",

@@ -39,7 +39,7 @@ export interface CoverListProps {
 const props = withDefaults(defineProps<CoverListProps>(), {
   type: "default",
   virtual: true,
-  minSize: 130,
+  minSize: 118,
   maxColumns: 8,
   gap: 20,
   rounded: "rounded-xl",
@@ -108,7 +108,12 @@ const displayItems = computed(() => {
   const cols = columnCount.value;
   if (cols <= 0 || props.items.length === 0) return [];
   const fullRows = Math.floor(props.items.length / cols);
-  const rowsToShow = Math.min(props.limitRows, Math.max(1, fullRows));
+  // 当小屏（如手机 cols <= 3）时，如果 limitRows 是 1，放宽为 2 行，避免手机端只剩 2 个卡片过于稀疏
+  let targetRows = props.limitRows;
+  if (cols <= 3 && props.limitRows === 1) {
+    targetRows = 2;
+  }
+  const rowsToShow = Math.min(targetRows, Math.max(1, fullRows));
   const maxCount = Math.min(props.items.length, cols * rowsToShow);
   return props.items.slice(0, maxCount);
 });

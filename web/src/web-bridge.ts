@@ -2441,6 +2441,9 @@ const webApi = {
         events.unshift(event);
         if (events.length > 5000) events.length = 5000;
         await statsDb.setItem(STATS_PLAY_EVENTS_KEY, events);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("splayer:stats-changed"));
+        }
       } catch (e) {
         console.warn("[web-bridge] recordPlay error:", e);
       }
@@ -2453,6 +2456,9 @@ const webApi = {
         events.unshift(event);
         if (events.length > 2000) events.length = 2000;
         await statsDb.setItem(STATS_FAV_EVENTS_KEY, events);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("splayer:stats-changed"));
+        }
       } catch (e) {
         console.warn("[web-bridge] recordFavorite error:", e);
       }

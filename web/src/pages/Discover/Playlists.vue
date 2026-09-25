@@ -40,19 +40,30 @@ const quickCategories = [
   "说唱",
 ];
 
-const showAllCatModal = ref(false);
-const categoryGroups = ref<PlaylistCategoryGroup[]>([]);
+import { getPlaylistCache, setPlaylistCache } from "@/services/discoverCache";
 
-const playlists = ref<CoverItem[]>([]);
-const offset = ref(0);
-const loading = ref(false);
+const initialCache = getPlaylistCache();
+const hasInitialCache = Boolean(
+  initialCache &&
+  activeType.value === "recommend" &&
+  currentCat.value === "全部" &&
+  initialCache.items.length > 0,
+);
+
+const showAllCatModal = ref(false);
+const categoryGroups = ref<PlaylistCategoryGroup[]>(initialCache?.categoryGroups ?? []);
+
+const playlists = ref<CoverItem[]>(hasInitialCache ? [...initialCache!.items] : []);
+const offset = ref(hasInitialCache ? initialCache!.items.length : 0);
+const loading = ref(!hasInitialCache);
 const loadingMore = ref(false);
-const hasMore = ref(true);
+const hasMore = ref(hasInitialCache ? initialCache!.more : true);
 
 const coverListRef = ref<InstanceType<typeof CoverList> | null>(null);
 const showBackTop = ref(false);
 
 const loadCategories = async (): Promise<void> => {
+  if (categoryGroups.value.length > 0) return;
   try {
     const data = await fetchPlaylistCatlist();
     categoryGroups.value = data.groups;
@@ -66,7 +77,9 @@ const loadData = async (isAppend = false): Promise<void> => {
     if (loadingMore.value || !hasMore.value) return;
     loadingMore.value = true;
   } else {
-    loading.value = true;
+    if (playlists.value.length === 0) {
+      loading.value = true;
+    }
     offset.value = 0;
   }
 
@@ -83,6 +96,13 @@ const loadData = async (isAppend = false): Promise<void> => {
       playlists.value.push(...res.items);
     } else {
       playlists.value = res.items;
+      if (!isHq && currentCat.value === "全部") {
+        setPlaylistCache({
+          categoryGroups: categoryGroups.value,
+          items: res.items,
+          more: res.more,
+        });
+      }
     }
     hasMore.value = res.more;
     offset.value += res.items.length;

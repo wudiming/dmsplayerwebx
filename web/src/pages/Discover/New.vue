@@ -30,19 +30,44 @@ const areaOptions = [
 const activeType = ref<string>((route.query.type as string) || "albums");
 const activeAreaIdx = ref<number>(Number(route.query.area as string) || 0);
 
-const albums = ref<CoverItem[]>([]);
-const songs = ref<Track[]>([]);
-const offset = ref(0);
-const loading = ref(false);
+import {
+  getNewAlbumCache,
+  setNewAlbumCache,
+  getNewSongCache,
+  setNewSongCache,
+} from "@/services/discoverCache";
+
+const initialAlbumCache = getNewAlbumCache();
+const initialSongCache = getNewSongCache();
+const isDefaultArea = activeAreaIdx.value === 0;
+
+const hasInitialAlbumCache = Boolean(
+  initialAlbumCache &&
+  isDefaultArea &&
+  initialAlbumCache.items.length > 0,
+);
+const hasInitialSongCache = Boolean(
+  initialSongCache &&
+  isDefaultArea &&
+  initialSongCache.length > 0,
+);
+
+const albums = ref<CoverItem[]>(hasInitialAlbumCache ? [...initialAlbumCache!.items] : []);
+const songs = ref<Track[]>(hasInitialSongCache ? [...initialSongCache!] : []);
+const offset = ref(hasInitialAlbumCache ? initialAlbumCache!.items.length : 0);
+const loading = ref(activeType.value === "albums" ? !hasInitialAlbumCache : !hasInitialSongCache);
 const loadingMore = ref(false);
-const hasMore = ref(true);
+const hasMore = ref(hasInitialAlbumCache ? initialAlbumCache!.more : true);
 
 const loadData = async (isAppend = false): Promise<void> => {
   if (isAppend) {
     if (loadingMore.value || !hasMore.value) return;
     loadingMore.value = true;
   } else {
-    loading.value = true;
+    const hasData = activeType.value === "albums" ? albums.value.length > 0 : songs.value.length > 0;
+    if (!hasData) {
+      loading.value = true;
+    }
     offset.value = 0;
   }
 
@@ -59,12 +84,22 @@ const loadData = async (isAppend = false): Promise<void> => {
         albums.value.push(...res.items);
       } else {
         albums.value = res.items;
+        if (activeAreaIdx.value === 0) {
+          setNewAlbumCache({
+            items: res.items,
+            more: res.more,
+          });
+        }
       }
       hasMore.value = res.more;
       offset.value += res.items.length;
     } else {
       const rawSongs = await fetchNewSongs(area.songArea);
-      songs.value = songsToTracks(rawSongs);
+      const converted = songsToTracks(rawSongs);
+      songs.value = converted;
+      if (activeAreaIdx.value === 0) {
+        setNewSongCache(converted);
+      }
       hasMore.value = false;
     }
   } catch (err) {

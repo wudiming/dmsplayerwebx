@@ -48,23 +48,25 @@ watch(
   { immediate: true },
 );
 
+import { prefetchDiscoverData } from "./services/discoverCache";
+import { useLibraryStore } from "./stores/library";
+
 /**
- * 启动页时间线精确控制（严格按要求保证）：
+ * 启动页时间线精确控制：
  * 1. 文字动画绘制：1.8s (1800ms) - W, E, B, X 错峰入场，尾字符珊瑚粉高亮
- * 2. 绘制完成后完全静止停顿：0.7s (700ms) - 保证文字完整可见，静止停顿
- * -> 启动页内容在屏幕上必须保持完全不透明展示至少 2.5s (2500ms)
- * 3. 平滑淡出进入主界面：1.0s (1000ms) - 优雅淡出过渡至主界面
- * -> 整体总时长：整整 3.5s (3500ms)
+ * 2. 绘制完成后完全静止停顿：0.5s (500ms) - 保证文字完整可见，静止停顿
+ * -> 启动页内容在屏幕上保持完全不透明展示 2.3s (2300ms)
+ * 3. 平滑淡出进入主界面：0.8s (800ms) - 优雅淡出过渡至主界面
+ * -> 整体总时长：整整 3.1s (3100ms)
  */
-const SPLASH_HOLD_MS = 2500;
-const SPLASH_FADE_MS = 1000;
+const SPLASH_HOLD_MS = 2300;
+const SPLASH_FADE_MS = 800;
 
 let splashRemovalScheduled = false;
 
 /**
  * 严格执行启动页时序控制：
- * 无论外部何时触发（包括路由就绪、挂载完成或异常兜底），
- * 都必须硬性保证：文字动画 1.8s + 停顿 0.7s = 2.5s 之后才开始淡出，淡出时长 1.0s，总计 3.5s。
+ * 保证：文字动画 1.8s + 停顿 0.5s = 2.3s 之后才开始淡出，淡出时长 0.8s，总计 3.1s。
  */
 const safeRemoveSplash = (): void => {
   if (splashRemovalScheduled) return;
@@ -84,6 +86,15 @@ const safeRemoveSplash = (): void => {
     }, SPLASH_FADE_MS + 50);
   }, remainingHold);
 };
+
+// 全局兜底保护（强制启动移除流程，避免任何未知挂起）
+setTimeout(safeRemoveSplash, SPLASH_HOLD_MS);
+
+// 在起始页动画期间，后台静默并行预加载核心数据（首页、音乐库/歌单、艺术家、排行榜、最新音乐、本地曲库）
+setTimeout(() => {
+  void prefetchDiscoverData();
+  void useLibraryStore().loadLibrary().catch(() => {});
+}, 100);
 
 /**
  * 启动播放服务并分发冷启动任务
@@ -117,7 +128,7 @@ router
     // 启动播放服务
     void bootstrapPlayback().catch(console.error);
 
-    // 计划启动页平滑退出（严格保证 4.3s 停留 + 0.7s 淡出）
+    // 计划启动页平滑退出
     safeRemoveSplash();
 
     // 初始化快捷键
@@ -130,6 +141,3 @@ router
     console.error("[router] ready failed:", err);
     safeRemoveSplash();
   });
-
-// 全局兜底保护（5 秒强制启动移除流程，避免任何未知挂起）
-setTimeout(safeRemoveSplash, SPLASH_HOLD_MS);

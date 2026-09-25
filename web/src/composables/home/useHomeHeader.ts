@@ -139,5 +139,28 @@ export const useHomeHeader = () => {
     subtitlePick.value = pickRandom(buildSubtitles());
   };
 
+  // 实时响应播放、收藏等统计数据变更与页面可见状态，保持实时同步无需手动刷新
+  if (typeof window !== "undefined") {
+    let timer: number | null = null;
+    const debouncedLoad = (): void => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void load();
+      }, 300);
+    };
+
+    window.addEventListener("splayer:stats-changed", debouncedLoad);
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    tryOnScopeDispose(() => {
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("splayer:stats-changed", debouncedLoad);
+      document.removeEventListener("visibilitychange", onVisibility);
+    });
+  }
+
   return { greetingTitle, greetingSub, headerStats, load };
 };

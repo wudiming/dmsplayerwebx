@@ -92,42 +92,59 @@ const playlistToCover = (raw: RawRecommendPlaylist): CoverItem => ({
 });
 
 /**
- * 推荐歌单
- * 已登录取每日专属歌单（recommend/resource），未登录取通用推荐（personalized）；
- * 过滤掉「私人雷达」类个性化歌单
+ * 推荐歌单 / 专属歌单
+ * 已登录优先取每日专属歌单（recommend/resource），并自动从个性化推荐（personalized）补齐至 24 个；
+ * 未登录取通用推荐（personalized）；过滤掉「雷达」类歌单，保证充足数据充满整行 8 列。
  * @param loggedIn - 是否已登录
  * @returns 歌单封面卡片列表
  */
 export const fetchRecommendPlaylists = async (loggedIn: boolean): Promise<CoverItem[]> => {
-  const list = loggedIn
-    ? ((await neteaseApi.recommend_resource<{ recommend?: RawRecommendPlaylist[] }>())?.recommend ??
-      [])
-    : ((
-        await neteaseApi.personalized<{ result?: RawRecommendPlaylist[] }>({
-          limit: PERSONALIZED_FETCH_LIMIT,
-        })
-      )?.result ?? []);
-  return list
-    .filter((raw) => !raw.name.includes("雷达"))
-    .slice(0, HOME_GRID_LIMIT)
-    .map(playlistToCover);
+  let list: RawRecommendPlaylist[] = [];
+  if (loggedIn) {
+    try {
+      const res = await neteaseApi.recommend_resource<{ recommend?: RawRecommendPlaylist[] }>();
+      list = (res?.recommend ?? []).filter((raw) => !raw.name.includes("雷达"));
+    } catch (err) {
+      console.warn("[recommend] fetch recommend_resource failed, will fallback to personalized:", err);
+    }
+  }
+  // 无论未登录还是已登录专属歌单数量不足时，均从个性化推荐 (personalized) 自动补足至 24 个
+  if (list.length < HOME_GRID_LIMIT) {
+    try {
+      const pRes = await neteaseApi.personalized<{ result?: RawRecommendPlaylist[] }>({
+        limit: PERSONALIZED_FETCH_LIMIT,
+      });
+      const extra = (pRes?.result ?? []).filter((raw) => !raw.name.includes("雷达"));
+      const existingIds = new Set(list.map((it) => String(it.id)));
+      for (const item of extra) {
+        if (!existingIds.has(String(item.id))) {
+          list.push(item);
+          if (list.length >= HOME_GRID_LIMIT) break;
+        }
+      }
+    } catch (err) {
+      console.warn("[recommend] fetch personalized fallback failed:", err);
+    }
+  }
+  return list.slice(0, HOME_GRID_LIMIT).map(playlistToCover);
 };
 
-/** 雷达歌单固定 id（私人 / 会员 / 时光 / 乐迷 / 宝藏 / 新歌 / 神秘） */
+/** 雷达歌单固定 id（私人 / 会员 / 时光 / 乐迷 / 宝藏 / 新歌 / 神秘 / 华语私人）- 凑齐 8 大官方经典雷达 */
 const RADAR_PLAYLIST_IDS = [
-  "3136952023",
-  "8402996200",
-  "5320167908",
-  "5327906368",
-  "5362359247",
-  "5300458264",
-  "5341776086",
+  "3136952023", // 私人雷达
+  "8402996200", // 会员雷达
+  "5320167908", // 时光雷达
+  "5327906368", // 乐迷雷达
+  "5362359247", // 宝藏雷达
+  "5300458264", // 新歌雷达
+  "5341776086", // 神秘雷达
+  "2829883282", // 华语私人雷达
 ];
 
 /**
  * 雷达歌单
  * 按固定 id 逐个取歌单详情组装成封面卡片，个别失败不影响整体
- * @returns 雷达歌单封面卡片列表
+ * @returns 雷达歌单封面卡片列表（共 8 个）
  */
 export const fetchRadarPlaylists = async (): Promise<CoverItem[]> => {
   const results = await Promise.allSettled(
@@ -136,7 +153,14 @@ export const fetchRadarPlaylists = async (): Promise<CoverItem[]> => {
   const covers: CoverItem[] = [];
   for (const result of results) {
     if (result.status === "fulfilled" && result.value?.playlist) {
-      covers.push(playlistToCoverItem(toPlaylist(result.value.playlist)));
+      const cover = playlistToCoverItem(toPlaylist(result.value.playlist));
+      // 优化雷达卡片标题，去掉长后缀如 " | 最懂你的华语推荐 每日更新35首"
+      if (cover.title.includes(" | ")) {
+        const [mainTitle, sub] = cover.title.split(" | ");
+        cover.title = mainTitle.trim();
+        if (sub && !cover.subtitle) cover.subtitle = sub.trim();
+      }
+      covers.push(cover);
     }
   }
   return covers;

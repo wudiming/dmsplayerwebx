@@ -9,16 +9,31 @@ import IconLucidePlay from "~icons/lucide/play";
 
 const router = useRouter();
 
-const loading = ref(false);
-const officialList = ref<ToplistItem[]>([]);
-const selectedList = ref<CoverItem[]>([]);
+import { getToplistCache, setToplistCache } from "@/services/discoverCache";
+
+const initialCache = getToplistCache();
+const hasInitialCache = Boolean(
+  initialCache &&
+  ((initialCache.official && initialCache.official.length > 0) ||
+   (initialCache.selected && initialCache.selected.length > 0))
+);
+
+const loading = ref(!hasInitialCache);
+const officialList = ref<ToplistItem[]>(hasInitialCache ? [...initialCache!.official] : []);
+const selectedList = ref<CoverItem[]>(hasInitialCache ? [...initialCache!.selected] : []);
 
 const loadData = async (): Promise<void> => {
-  loading.value = true;
+  if (officialList.value.length === 0 && selectedList.value.length === 0) {
+    loading.value = true;
+  }
   try {
     const res = await fetchToplists();
     officialList.value = res.official;
     selectedList.value = res.selected;
+    setToplistCache({
+      official: res.official,
+      selected: res.selected,
+    });
   } catch (err) {
     console.error("[DiscoverToplists] loadData error:", err);
   } finally {

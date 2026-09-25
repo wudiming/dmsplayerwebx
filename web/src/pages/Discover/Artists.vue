@@ -43,18 +43,26 @@ const selectedCategoryIndex = ref<number>(
   Number(route.query.catIndex as string) || 0,
 );
 
-const artists = ref<CoverItem[]>([]);
-const offset = ref(0);
-const loading = ref(false);
+import { getArtistCache, setArtistCache } from "@/services/discoverCache";
+
+const initialCache = getArtistCache();
+const isDefaultFilter = String(selectedInitial.value) === "-1" && selectedCategoryIndex.value === 0;
+const hasInitialCache = Boolean(initialCache && isDefaultFilter && initialCache.items.length > 0);
+
+const artists = ref<CoverItem[]>(hasInitialCache ? [...initialCache!.items] : []);
+const offset = ref(hasInitialCache ? initialCache!.items.length : 0);
+const loading = ref(!hasInitialCache);
 const loadingMore = ref(false);
-const hasMore = ref(true);
+const hasMore = ref(hasInitialCache ? initialCache!.more : true);
 
 const loadData = async (isAppend = false): Promise<void> => {
   if (isAppend) {
     if (loadingMore.value || !hasMore.value) return;
     loadingMore.value = true;
   } else {
-    loading.value = true;
+    if (artists.value.length === 0) {
+      loading.value = true;
+    }
     offset.value = 0;
   }
 
@@ -72,6 +80,12 @@ const loadData = async (isAppend = false): Promise<void> => {
       artists.value.push(...res.items);
     } else {
       artists.value = res.items;
+      if (String(selectedInitial.value) === "-1" && selectedCategoryIndex.value === 0) {
+        setArtistCache({
+          items: res.items,
+          more: res.more,
+        });
+      }
     }
     hasMore.value = res.more;
     offset.value += res.items.length;

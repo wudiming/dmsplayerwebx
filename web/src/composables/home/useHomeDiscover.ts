@@ -31,6 +31,28 @@ const safe = (label: string, task: Promise<CoverItem[]>): Promise<CoverItem[]> =
   });
 
 /**
+ * 供后台静默预加载首页数据（不依赖 Vue setup / useI18n，可在启动早期安全调用）
+ */
+export const prefetchHomeDiscover = async (): Promise<void> => {
+  try {
+    const user = useUserStore();
+    const loggedIn = user.isLoggedIn;
+    if (cache && cache.loggedIn === loggedIn && Date.now() - cache.at < CACHE_TTL) {
+      return;
+    }
+    const [recommend, radar, artistList, albums] = await Promise.all([
+      safe("recommend playlists", fetchRecommendPlaylists(loggedIn)),
+      safe("radar playlists", fetchRadarPlaylists()),
+      safe("artists", fetchArtists()),
+      safe("new albums", fetchNewAlbums()),
+    ]);
+    cache = { at: Date.now(), loggedIn, recommend, radar, artists: artistList, albums };
+  } catch (error) {
+    console.warn("[home prefetch] failed:", error);
+  }
+};
+
+/**
  * 首页推荐内容
  *
  * 聚合「推荐歌单 / 雷达 / 歌手 / 新碟」四个区块，统一拉取与缓存

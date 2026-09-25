@@ -2253,6 +2253,7 @@
     "losslessRatio": "Lossless",
     "trackUnit": "tracks",
     "listeningHours": "Listening Hours",
+    "peakBadge": "Peak",
     "peakListening": "Most played",
     "favoriteHour": "You listen most often at {hour}:00, with {count} tracks in total",
     "noPlayHistory": "No listening-hour data yet",

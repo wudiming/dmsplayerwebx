@@ -50,12 +50,24 @@ const {
   load: loadDiscover,
 } = useHomeDiscover();
 
+const route = useRoute();
+
 onMounted(() => {
   void loadHeader();
   void loadHero();
   void loadContinue();
   void loadDiscover();
 });
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path === "/") {
+      void loadHeader();
+      void loadContinue();
+    }
+  },
+);
 
 /** 拼接歌手名 */
 const artistName = (track: Track): string => track.artists.map((artist) => artist.name).join(" / ");
@@ -277,7 +289,7 @@ const openDaily = (): void => {
         </div>
         <CoverList
           :items="recommendPlaylists"
-          :limit-rows="2"
+          :limit-rows="1"
           :virtual="false"
           :gap="16"
           @click="openPlaylist"
@@ -291,6 +303,7 @@ const openDaily = (): void => {
         </div>
         <CoverList
           :items="radarPlaylists"
+          :limit-rows="1"
           :virtual="false"
           :gap="16"
           @click="openPlaylist"

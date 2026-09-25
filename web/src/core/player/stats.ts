@@ -58,6 +58,9 @@ const finalize = (): void => {
   session = null;
   if (listenedMs < MIN_RECORD_MS) return;
   window.api.stats.recordPlay({ track, startedAt, listenedMs });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("splayer:stats-changed"));
+  }
 };
 
 /**
