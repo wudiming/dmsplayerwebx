@@ -1,7 +1,48 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+const COMPRESSIBLE_EXTS = new Set([
+  ".html", ".js", ".mjs", ".css", ".json", ".svg", ".txt", ".xml"
+]);
+
+function sendStaticFile(req, res, filePath, contentType, cacheControl) {
+  const stat = fs.statSync(filePath);
+  const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": cacheControl,
+    "ETag": etag,
+    "Accept-Ranges": "bytes",
+  };
+
+  if (req.headers["if-none-match"] === etag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const acceptEncoding = req.headers["accept-encoding"] || "";
+  const isCompressible = COMPRESSIBLE_EXTS.has(ext);
+
+  if (isCompressible && /\bgzip\b/.test(acceptEncoding)) {
+    headers["Content-Encoding"] = "gzip";
+    res.writeHead(200, headers);
+    fs.createReadStream(filePath).pipe(zlib.createGzip({ level: 6 })).pipe(res);
+  } else if (isCompressible && /\bdeflate\b/.test(acceptEncoding)) {
+    headers["Content-Encoding"] = "deflate";
+    res.writeHead(200, headers);
+    fs.createReadStream(filePath).pipe(zlib.createDeflate()).pipe(res);
+  } else {
+    headers["Content-Length"] = stat.size;
+    res.writeHead(200, headers);
+    fs.createReadStream(filePath).pipe(res);
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 5173;
@@ -91,11 +132,7 @@ const server = http.createServer((req, res) => {
     const filename = pathname.replace(/^\/plugins\//, "");
     const pluginFile = path.join(PLUGIN_DIR, filename);
     if (fs.existsSync(pluginFile) && fs.statSync(pluginFile).isFile()) {
-      res.writeHead(200, {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "no-cache",
-      });
-      fs.createReadStream(pluginFile).pipe(res);
+      sendStaticFile(req, res, pluginFile, "application/javascript; charset=utf-8", "no-cache");
       return;
     }
   }
@@ -111,22 +148,14 @@ const server = http.createServer((req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || "application/octet-stream";
     const cacheControl = ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable";
-    res.writeHead(200, {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-    });
-    fs.createReadStream(filePath).pipe(res);
+    sendStaticFile(req, res, filePath, contentType, cacheControl);
     return;
   }
 
   // SPA fallback to index.html
   const indexPath = path.join(DIST_DIR, "index.html");
   if (fs.existsSync(indexPath)) {
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-cache",
-    });
-    fs.createReadStream(indexPath).pipe(res);
+    sendStaticFile(req, res, indexPath, "text/html; charset=utf-8", "no-cache");
     return;
   }
 

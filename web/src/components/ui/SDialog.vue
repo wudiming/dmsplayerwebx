@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from "vue";
 import { usePopupZIndex } from "@/composables/useZIndex";
+import { useResponsive } from "@/composables/useResponsive";
 
 export interface SDialogProps {
   /** 控制打开状态（v-model:open） */
@@ -29,6 +30,10 @@ export interface SDialogProps {
   destroyOnClose?: boolean;
   /** 自定义固定层级 */
   zIndex?: number;
+  /** 弹窗内容容器额外类名 */
+  dialogClass?: string;
+  /** 打开时是否自动聚焦首个元素（默认为 true，移动端默认阻止以避免键盘弹起） */
+  autoFocus?: boolean;
 }
 
 const props = withDefaults(defineProps<SDialogProps>(), {
@@ -40,6 +45,8 @@ const props = withDefaults(defineProps<SDialogProps>(), {
   lazy: true,
   destroyOnClose: false,
 });
+
+const { isMobile } = useResponsive();
 
 const DESTROY_DELAY_MS = 180;
 
@@ -99,6 +106,13 @@ const setOpen = (val: boolean): void => {
   isOpen.value = val;
   emit("update:open", val);
 };
+
+const handleOpenAutoFocus = (event: Event): void => {
+  // 若显式设置为 false，或处于移动端且未显式指定为 true 时，阻止自动聚焦（防止手机端自动弹起虚拟键盘）
+  if (props.autoFocus === false || (props.autoFocus === undefined && isMobile.value)) {
+    event.preventDefault();
+  }
+};
 </script>
 
 <template>
@@ -119,6 +133,7 @@ const setOpen = (val: boolean): void => {
       />
       <DialogContent
         :style="[containerStyle, { zIndex: activeZIndex }]"
+        @open-auto-focus="handleOpenAutoFocus"
         :class="[
           'fixed left-1/2 -translate-x-1/2',
           top ? '' : 'top-1/2 -translate-y-1/2',
@@ -131,6 +146,7 @@ const setOpen = (val: boolean): void => {
           cover
             ? 'bg-black/55 backdrop-blur-xl backdrop-saturate-160 border border-solid border-white/10 text-cover'
             : 'bg-surface-alt border border-solid border-outline-variant/30 text-on-surface',
+          dialogClass,
         ]"
       >
         <!-- 标题 + 描述 -->

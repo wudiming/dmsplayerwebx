@@ -327,17 +327,18 @@ const runAction = async (key: ActionKey): Promise<void> => {
     <div
       v-for="row in rows"
       :key="row.key"
-      class="rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 flex items-center justify-between gap-4"
+      class="rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-3.5 py-3 sm:px-4 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
     >
       <div class="min-w-0 flex-1">
-        <div class="text-base">{{ t(`settings.${row.key}.label`) }}</div>
-        <div class="text-sm text-on-surface-variant/70 mt-0.5">
+        <div class="text-sm sm:text-base font-medium">{{ t(`settings.${row.key}.label`) }}</div>
+        <div class="text-xs sm:text-sm text-on-surface-variant/70 mt-0.5">
           {{ t(`settings.${row.key}.description`) }}
         </div>
       </div>
       <SButton
         :type="row.destructive ? 'error' : 'primary'"
         variant="secondary"
+        class="self-end sm:self-auto shrink-0"
         :loading="running === row.key"
         :disabled="running !== null && running !== row.key"
         @click="runAction(row.key)"

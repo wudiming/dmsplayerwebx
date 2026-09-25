@@ -70,22 +70,22 @@ const descriptionText = computed(() =>
     />
     <div
       v-else
-      class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 transition-all duration-300"
+      class="flex items-center justify-between gap-3 sm:gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-3.5 py-3 sm:px-4 sm:py-3.5 transition-all duration-300"
       :class="highlighted ? 'animate-highlight-pulse' : ''"
     >
       <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2 text-base">
+        <div class="flex items-center gap-2 text-sm sm:text-base font-medium">
           <span>{{ t(`settings.${item.key}.label`) }}</span>
-          <STag v-if="item.tag" :type="item.tag.type ?? 'primary'">
+          <STag v-if="item.tag" :type="item.tag.type ?? 'primary'" size="small">
             {{ item.tag.text }}
           </STag>
         </div>
-        <div v-if="!item.hideDescription" class="text-sm text-on-surface-variant/70 mt-0.5">
+        <div v-if="!item.hideDescription" class="text-xs sm:text-sm text-on-surface-variant/70 mt-0.5 break-words">
           {{ descriptionText }}
         </div>
       </div>
 
-      <div class="shrink-0 w-50 flex justify-end">
+      <div class="shrink-0 flex items-center justify-end max-w-[55%]">
         <SSwitch
           v-if="item.type === 'switch'"
           :model-value="model"
@@ -97,6 +97,7 @@ const descriptionText = computed(() =>
           :model-value="model"
           :options="selectOptions"
           :disabled="isDisabled"
+          class="w-32 sm:w-44 max-w-full"
           @update:model-value="applyChange($event)"
         />
         <SSlider
@@ -107,7 +108,7 @@ const descriptionText = computed(() =>
           :step="item.step ?? 1"
           :marks="item.marks"
           :disabled="isDisabled"
-          class="w-full"
+          class="w-28 sm:w-44 max-w-full"
           :thumb-size="14"
           :track-height="4"
           always-show-thumb
@@ -143,7 +144,7 @@ const descriptionText = computed(() =>
           :placeholder="item.placeholderKey ? t(item.placeholderKey) : ''"
           :disabled="isDisabled"
           update-on="blur"
-          class="w-full"
+          class="w-24 sm:w-36 max-w-full"
           @update:model-value="applyChange($event)"
         />
         <SInput
@@ -153,7 +154,7 @@ const descriptionText = computed(() =>
           :disabled="isDisabled"
           update-on="blur"
           clearable
-          class="w-full"
+          class="w-32 sm:w-48 max-w-full"
           @update:model-value="applyChange($event)"
         />
         <component
@@ -161,6 +162,7 @@ const descriptionText = computed(() =>
           v-else-if="item.type === 'custom' && item.component"
           v-bind="item.componentProps"
           :model-value="model"
+          class="max-w-full"
           @update:model-value="model = $event"
         />
       </div>

@@ -154,22 +154,22 @@ const errorTitleOf = (id: HotkeyActionId): string => {
       :key="group.category"
       class="rounded-xl bg-surface-panel border border-solid border-outline-variant/15 overflow-hidden"
     >
-      <div class="px-4 py-2.5 flex items-center gap-3 text-sm">
-        <span class="flex-1 text-on-surface-variant/80">
+      <div class="px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+        <span class="flex-1 text-on-surface-variant/80 truncate">
           {{ t(`settings.hotkeys.groups.${group.category}`) }}
         </span>
-        <span class="w-56 text-center text-on-surface-variant/60">
+        <span class="w-32 sm:w-44 md:w-56 text-center text-on-surface-variant/60 shrink-0">
           快捷键
         </span>
-        <span class="w-9" />
+        <span class="w-9 shrink-0" />
       </div>
       <SDivider />
       <div class="flex flex-col">
         <template v-for="(action, idx) in group.actions" :key="action.id">
-          <div class="px-4 py-2.5 flex items-center gap-3">
-            <span class="flex-1 text-sm">{{ t(action.labelKey) }}</span>
+          <div class="px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center gap-2 sm:gap-3">
+            <span class="flex-1 text-xs sm:text-sm truncate">{{ t(action.labelKey) }}</span>
 
-            <div class="w-56" :title="errorTitleOf(action.id)">
+            <div class="w-32 sm:w-44 md:w-56 shrink-0" :title="errorTitleOf(action.id)">
               <SInput
                 readonly
                 :model-value="valueOf(action.id)"

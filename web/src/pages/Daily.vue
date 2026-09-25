@@ -16,7 +16,7 @@ import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideSearch from "~icons/lucide/search";
 
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 const data = useDataStore();
 const user = useUserStore();
 
@@ -76,7 +76,7 @@ const playbackContext = computed<PlaybackContext | undefined>(() => ({
   originType: "playlist",
   originName:
     selectedDay.value && !selectedDay.value.isToday
-      ? `${t("daily.title")} (${formatDate(selectedDay.value.date, { month: "short", day: "numeric" })})`
+      ? `${t("daily.title")} (${formatDayLabel(selectedDay.value.date)})`
       : t("daily.title"),
 }));
 
@@ -90,11 +90,22 @@ const handlePlayAll = (): void => {
 const formatDate = (date: Date, options: Intl.DateTimeFormatOptions): string =>
   new Intl.DateTimeFormat(locale.value, options).format(date);
 
-/** 日期下拉选项 */
+/** 格式化日期为选项标签（直接显示日期，如 9月25日） */
+const formatDayLabel = (date: Date): string => {
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+  return formatDate(
+    date,
+    isCurrentYear
+      ? { month: "short", day: "numeric" }
+      : { year: "numeric", month: "short", day: "numeric" },
+  );
+};
+
+/** 日期下拉选项（直接显示日期，无“今天/昨天/前天”） */
 const dayOptions = computed<SSelectOption[]>(() =>
   days.value.map((day) => ({
     value: day.key,
-    label: day.isToday ? t("daily.today") : formatDate(day.date, { month: "long", day: "numeric" }),
+    label: formatDayLabel(day.date),
   })),
 );
 
@@ -114,9 +125,9 @@ const handleMore = async (key: string): Promise<void> => {
     loading.value = true;
     try {
       await data.ensureDailyRecommend(true);
-      toast.success(t("daily.refreshSuccess") || "每日推荐已刷新");
+      toast.success(te("daily.refreshSuccess") ? t("daily.refreshSuccess") : "每日推荐已刷新");
     } catch {
-      toast.error(t("daily.refreshFailed") || "刷新失败，请稍后重试");
+      toast.error(te("daily.refreshFailed") ? t("daily.refreshFailed") : "刷新失败，请稍后重试");
     } finally {
       loading.value = false;
     }
@@ -150,30 +161,30 @@ watch(
 <template>
   <div class="flex h-full flex-col">
     <!-- 顶栏 -->
-    <div class="shrink-0 px-5 pt-2 pb-3">
-      <div class="flex items-center gap-5">
+    <div class="shrink-0 px-3.5 sm:px-5 pt-2 pb-3">
+      <div class="flex items-center gap-3 sm:gap-5">
         <!-- 日历磁贴 -->
         <div
-          class="flex size-28 shrink-0 flex-col items-center justify-center rounded-2xl border border-solid border-primary/15 bg-primary/8"
+          class="flex size-20 sm:size-28 shrink-0 flex-col items-center justify-center rounded-xl sm:rounded-2xl border border-solid border-primary/15 bg-primary/8"
         >
           <template v-if="selectedDay">
-            <span class="text-xs text-on-surface-variant/60">
+            <span class="text-[11px] sm:text-xs text-on-surface-variant/60">
               {{ formatDate(selectedDay.date, { month: "short" }) }}
             </span>
-            <span class="text-4xl font-bold leading-tight text-primary tabular-nums">
+            <span class="text-2xl sm:text-4xl font-bold leading-tight text-primary tabular-nums">
               {{ selectedDay.date.getDate() }}
             </span>
-            <span class="text-xs text-on-surface-variant/60">
+            <span class="text-[11px] sm:text-xs text-on-surface-variant/60">
               {{ formatDate(selectedDay.date, { weekday: "short" }) }}
             </span>
           </template>
-          <IconLucideCalendarDays v-else class="size-8 text-primary/40" />
+          <IconLucideCalendarDays v-else class="size-7 sm:size-8 text-primary/40" />
         </div>
         <!-- 信息 -->
-        <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <div class="flex min-w-0 flex-1 flex-col gap-1.5 sm:gap-2">
           <!-- 标题 -->
-          <div class="flex items-baseline gap-3">
-            <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("daily.title") }}</h1>
+          <div class="flex items-baseline gap-2 sm:gap-3">
+            <h1 class="text-xl sm:text-3xl font-bold text-on-surface text-balance">{{ t("daily.title") }}</h1>
             <span
               v-if="selectedDay && selectedDay.tracks.length > 0"
               class="flex items-center gap-1 text-sm text-on-surface-variant/50"
@@ -222,7 +233,7 @@ watch(
                 :placeholder="t('common.search')"
                 clearable
                 round
-                class="w-32 focus-within:w-44"
+                class="w-32 focus-within:w-44 hidden sm:flex"
                 data-search-input
               >
                 <template #prefix>
@@ -240,7 +251,7 @@ watch(
                 <template #trigger="{ selected }">
                   <SButton variant="secondary" round>
                     <IconLucideCalendarDays class="size-4 shrink-0 opacity-60" />
-                    {{ selected?.label ?? t("daily.today") }}
+                    {{ selected?.label || (days[0] ? formatDayLabel(days[0].date) : formatDayLabel(new Date())) }}
                     <IconLucideChevronDown class="size-3.5 shrink-0 opacity-50" />
                   </SButton>
                 </template>

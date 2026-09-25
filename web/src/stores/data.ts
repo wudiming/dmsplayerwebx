@@ -5,8 +5,8 @@ import { fetchDailySongs } from "@/apis/recommend/netease";
 import { useUserStore } from "@/stores/user";
 
 const MAX_SEARCH_HISTORY = 20;
-/** 每日推荐归档保留天数 */
-const MAX_DAILY_ARCHIVE = 14;
+/** 每日推荐归档保留天数（含今天共 3 天） */
+const MAX_DAILY_ARCHIVE = 3;
 
 const cacheDb = localforage.createInstance({ name: "splayer", storeName: "data-cache" });
 
@@ -92,7 +92,7 @@ export const useDataStore = defineStore(
         dailyRecommend.value = [];
         dailyHistory.value = [];
       }
-      const cacheKey = `daily-recommend-archive:${uid}`;
+      const cacheKey = `daily-recommend-archive-v4:${uid}`;
       const head = dailyArchive[0];
       if (!force && head?.date === todayKey() && head.tracks.length > 0) {
         return dailyRecommend.value;
@@ -113,10 +113,16 @@ export const useDataStore = defineStore(
           }
           const tracks = await fetchDailySongs();
           if (tracks.length > 0) {
-            // 当天已在归档则覆盖，否则前插为新的一天
-            const rest =
-              dailyArchive[0]?.date === todayKey() ? dailyArchive.slice(1) : dailyArchive;
-            dailyArchive = [{ date: todayKey(), tracks }, ...rest].slice(0, MAX_DAILY_ARCHIVE);
+            const currentTodayKey = todayKey();
+            if (dailyArchive.length > 0 && dailyArchive[0]?.date === currentTodayKey) {
+              // 当天已有数据：刷新仅更新当天的内容，历史记录完全保持不变
+              dailyArchive[0] = { date: currentTodayKey, tracks };
+            } else {
+              // 自然跨天或初次加载：前一天的记录自然沉淀为历史数据
+              const rest = dailyArchive.filter((entry) => entry.date !== currentTodayKey);
+              dailyArchive = [{ date: currentTodayKey, tracks }, ...rest].slice(0, MAX_DAILY_ARCHIVE);
+            }
+
             syncDaily();
             cacheDb.setItem(cacheKey, dailyArchive).catch(() => {});
           }

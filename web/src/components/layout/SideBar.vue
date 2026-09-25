@@ -18,6 +18,19 @@ import IconLucideSettings2 from "~icons/lucide/settings-2";
 import IconLucideChevronDown from "~icons/lucide/chevron-down";
 import SButton from "@/components/ui/SButton.vue";
 
+const props = withDefaults(
+  defineProps<{
+    collapsed?: boolean;
+  }>(),
+  {
+    collapsed: undefined,
+  },
+);
+
+const emit = defineEmits<{
+  navigate: [key: string];
+}>();
+
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
@@ -28,11 +41,16 @@ const userStore = useUserStore();
 const downloadStore = useDownloadStore();
 const settingsDialog = useSettingsDialog();
 
+const isCollapsed = computed(() => {
+  if (props.collapsed !== undefined) return props.collapsed;
+  return appearance.sidebarCollapsed;
+});
+
 const createDialogOpen = ref(false);
 
-/** 歌单分组折叠状态（本地持久化记忆） */
-const myPlaylistsCollapsed = useStorage("splayer_sidebar_my_playlists_collapsed", false);
-const subscribedPlaylistsCollapsed = useStorage("splayer_sidebar_sub_playlists_collapsed", false);
+/** 歌单分组折叠状态（默认收起，本地持久化记忆） */
+const myPlaylistsCollapsed = useStorage("splayer_sidebar_my_playlists_collapsed_v2", true);
+const subscribedPlaylistsCollapsed = useStorage("splayer_sidebar_sub_playlists_collapsed_v2", true);
 
 const handleCreate = (): void => {
   createDialogOpen.value = true;
@@ -311,6 +329,7 @@ const activeKey = computed(() => {
 
 const onSelect = (key: string) => {
   router.push(key);
+  emit("navigate", key);
 };
 
 /**
@@ -361,12 +380,12 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full">
-    <SideBarLogo :collapsed="appearance.sidebarCollapsed" />
+    <SideBarLogo :collapsed="isCollapsed" />
     <SContextMenu :items="contextMenuItems" @select="onContextMenuSelect">
       <div
         class="flex-1 min-h-0 pb-3 overflow-y-auto transition-[padding] duration-300"
         :class="
-          appearance.sidebarCollapsed
+          isCollapsed
             ? 'px-2 [&::-webkit-scrollbar]:hidden'
             : 'px-3 [scrollbar-gutter:stable]'
         "
@@ -375,7 +394,7 @@ onMounted(() => {
         <SMenu
           :items="menuItems"
           :model-value="activeKey"
-          :collapsed="appearance.sidebarCollapsed"
+          :collapsed="isCollapsed"
           @select="onSelect"
         />
       </div>

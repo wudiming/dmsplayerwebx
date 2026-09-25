@@ -260,28 +260,28 @@ const albumItems = computed<CoverItem[]>(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 头部信息 -->
-    <div v-if="artist" class="shrink-0 px-5 pb-2">
+    <div v-if="artist" class="shrink-0 px-3.5 sm:px-5 pb-2">
       <div
         class="flex mt-2 transition-[gap,margin] duration-300"
-        :class="collapsed ? 'gap-3 mb-3' : 'gap-5 mb-4'"
+        :class="collapsed ? 'gap-2.5 sm:gap-3 mb-2 sm:mb-3' : 'gap-3 sm:gap-5 mb-3 sm:mb-4'"
       >
         <!-- 头像 -->
         <SImg
           :src="artist.avatar ?? fallbackTrackCover"
           :fallback="artistFallback"
           :alt="artist.name"
-          class="shrink-0 rounded-full transition-[width,height] duration-300"
-          :class="collapsed ? 'size-20' : 'size-40'"
+          class="shrink-0 rounded-full transition-[width,height] duration-300 object-cover"
+          :class="collapsed ? 'size-14 sm:size-20' : 'size-24 sm:size-40'"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0 py-1">
           <div
             class="flex flex-col transition-[gap] duration-300"
-            :class="collapsed ? 'gap-0.5' : 'gap-2'"
+            :class="collapsed ? 'gap-0.5' : 'gap-1 sm:gap-2'"
           >
             <h1
               class="font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
-              :class="collapsed ? 'text-xl' : 'text-3xl'"
+              :class="collapsed ? 'text-lg sm:text-xl' : 'text-xl sm:text-3xl'"
             >
               {{ artist.name }}
             </h1>
@@ -356,7 +356,7 @@ const albumItems = computed<CoverItem[]>(() => {
               :disabled="activeTab !== 'songs'"
               clearable
               round
-              class="w-40 focus-within:w-56"
+              class="w-32 sm:w-40 focus-within:w-44 sm:focus-within:w-56 hidden sm:flex"
               data-search-input
             >
               <template #prefix>

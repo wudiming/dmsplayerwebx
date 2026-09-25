@@ -88,55 +88,78 @@ const openDaily = (): void => {
 <template>
   <div class="h-full overflow-y-auto">
     <div
-      class="w-full flex flex-col gap-6 px-6 pt-6"
+      class="w-full flex flex-col gap-5 sm:gap-6 px-3.5 sm:px-6 pt-4 sm:pt-6"
       :class="isFloatingBar ? 'pb-28' : 'pb-10'"
     >
       <!-- 问候 -->
-      <header class="flex items-start justify-between gap-6">
+      <header class="flex items-start justify-between gap-4">
         <div class="min-w-0">
-          <h1 class="text-3xl font-bold text-on-surface text-balance">{{ greetingTitle }}</h1>
-          <p class="mt-2 text-sm text-on-surface-variant/70">{{ greetingSub }}</p>
+          <h1 class="text-2xl sm:text-3xl font-bold text-on-surface text-balance">
+            {{ greetingTitle }}
+          </h1>
+          <p class="mt-1 sm:mt-2 text-xs sm:text-sm text-on-surface-variant/70">{{ greetingSub }}</p>
         </div>
-        <div class="shrink-0 flex items-center gap-6">
+        <div class="shrink-0 hidden sm:flex items-center gap-4 sm:gap-6">
           <div v-for="stat in headerStats" :key="stat.label" class="text-right">
             <div class="flex items-baseline justify-end gap-0.5">
-              <span class="text-2xl font-bold text-on-surface tabular-nums">{{ stat.value }}</span>
-              <span class="text-sm text-on-surface-variant">{{ stat.unit }}</span>
+              <span class="text-xl sm:text-2xl font-bold text-on-surface tabular-nums">
+                {{ stat.value }}
+              </span>
+              <span class="text-xs sm:text-sm text-on-surface-variant">{{ stat.unit }}</span>
             </div>
             <div class="mt-0.5 text-xs text-on-surface-variant/50">{{ stat.label }}</div>
           </div>
         </div>
       </header>
       <!-- Hero -->
-      <SCard v-if="user.isLoggedIn && (heroLoading || hero)" radius="xl" flush class="min-h-40 -mb-3">
-        <div class="flex items-stretch gap-4 p-4">
+      <SCard
+        v-if="user.isLoggedIn && (heroLoading || hero)"
+        radius="xl"
+        flush
+        class="min-h-36 -mb-2 sm:-mb-3"
+      >
+        <div class="flex items-stretch gap-3 sm:gap-4 p-3.5 sm:p-4">
           <!-- 封面 -->
           <div
-            class="size-32 shrink-0 self-center overflow-hidden rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+            class="size-24 sm:size-32 shrink-0 self-center overflow-hidden rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
             title="查看每日推荐"
             @click="openDaily"
           >
             <SImg :src="hero?.cover" :alt="hero?.title" class="size-full" />
           </div>
           <!-- 信息 -->
-          <div class="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col justify-center gap-1 sm:gap-1.5">
             <STag v-if="hero" type="default" round size="small" class="self-start">
               {{ hero.tag }}
             </STag>
             <h2
-              class="truncate text-xl font-bold text-on-surface hover:text-primary cursor-pointer transition-colors"
+              class="truncate text-base sm:text-xl font-bold text-on-surface hover:text-primary cursor-pointer transition-colors"
               title="查看每日推荐"
               @click="openDaily"
             >
               {{ hero?.title }}
             </h2>
-            <p class="truncate text-sm text-on-surface-variant/70">{{ hero?.subtitle }}</p>
-            <div class="mt-0.5 flex items-center gap-2">
-              <SButton type="primary" round :disabled="heroLoading" @click="playHero">
+            <p class="truncate text-xs sm:text-sm text-on-surface-variant/70">{{ hero?.subtitle }}</p>
+            <div class="mt-1 flex items-center gap-2">
+              <SButton
+                type="primary"
+                round
+                size="small"
+                class="whitespace-nowrap sm:px-3.5"
+                :disabled="heroLoading"
+                @click="playHero"
+              >
                 <template #icon><IconLucidePlay /></template>
                 {{ t("home.hero.play") }}
               </SButton>
-              <SButton variant="secondary" round :disabled="heroLoading" @click="addHeroToQueue">
+              <SButton
+                variant="secondary"
+                round
+                size="small"
+                class="whitespace-nowrap sm:px-3.5"
+                :disabled="heroLoading"
+                @click="addHeroToQueue"
+              >
                 <template #icon><IconLucidePlus /></template>
                 {{ t("home.hero.addQueue") }}
               </SButton>
@@ -145,7 +168,7 @@ const openDaily = (): void => {
           <!-- 队列预览 -->
           <ul
             v-if="heroPreview.length > 0"
-            class="w-100 shrink-0 flex-col border-l border-on-surface/8 pl-4 lg:flex"
+            class="w-80 xl:w-100 shrink-0 hidden lg:flex flex-col border-l border-on-surface/8 pl-4"
           >
             <li
               v-for="(track, index) in heroPreview"
@@ -154,10 +177,14 @@ const openDaily = (): void => {
               :title="`播放 ${track.title}`"
               @click="playPreviewTrack(index)"
             >
-              <span class="w-5 shrink-0 text-xs tabular-nums text-on-surface-variant/35 group-hover:text-primary transition-colors">
+              <span
+                class="w-5 shrink-0 text-xs tabular-nums text-on-surface-variant/35 group-hover:text-primary transition-colors"
+              >
                 {{ trackNo(index) }}
               </span>
-              <span class="flex-1 truncate text-sm text-on-surface group-hover:text-primary transition-colors">
+              <span
+                class="flex-1 truncate text-sm text-on-surface group-hover:text-primary transition-colors"
+              >
                 {{ track.title }}
               </span>
               <span class="max-w-24 shrink-0 truncate text-xs text-on-surface-variant/45">
@@ -168,51 +195,55 @@ const openDaily = (): void => {
         </div>
       </SCard>
       <!-- 快捷入口 -->
-      <section class="grid grid-cols-4 gap-3">
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3">
         <SCard
           v-for="action in quickActions"
           :key="action.title"
           radius="xl"
           hoverable
-          class="flex items-center gap-3"
+          class="flex items-center gap-2.5 sm:gap-3 p-3"
           @click="action.run()"
         >
           <div
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+            class="flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
           >
-            <component :is="action.icon" class="size-5" />
+            <component :is="action.icon" class="size-4 sm:size-5" />
           </div>
           <div class="min-w-0">
-            <div class="truncate text-sm font-medium text-on-surface">{{ action.title }}</div>
-            <div class="truncate text-xs text-on-surface-variant/50">{{ action.desc }}</div>
+            <div class="truncate text-xs sm:text-sm font-medium text-on-surface">
+              {{ action.title }}
+            </div>
+            <div class="truncate text-[11px] sm:text-xs text-on-surface-variant/50">
+              {{ action.desc }}
+            </div>
           </div>
         </SCard>
       </section>
       <!-- 继续聆听 / 反复聆听 -->
       <section class="flex flex-col gap-3">
         <div>
-          <h3 class="text-lg font-semibold text-on-surface">{{ continueTitle }}</h3>
+          <h3 class="text-base sm:text-lg font-semibold text-on-surface">{{ continueTitle }}</h3>
           <p v-if="continueSubtitle" class="mt-0.5 text-xs text-on-surface-variant/50">
             {{ continueSubtitle }}
           </p>
         </div>
-        <div v-if="continueItems.length > 0" class="grid grid-cols-4 gap-3">
+        <div v-if="continueItems.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           <SCard
             v-for="(item, index) in continueItems"
             :key="`${item.track.source}:${item.track.id}`"
             radius="xl"
             size="small"
             hoverable
-            class="group flex items-center gap-3"
+            class="group flex items-center gap-2.5 sm:gap-3"
             @click="player.playNow(item.track)"
           >
             <span
-              class="w-5 shrink-0 text-center text-sm font-semibold tabular-nums text-on-surface-variant/30"
+              class="w-5 shrink-0 text-center text-xs sm:text-sm font-semibold tabular-nums text-on-surface-variant/30"
             >
               {{ trackNo(index) }}
             </span>
-            <div class="relative size-12 shrink-0">
-              <SImg :src="item.track.cover" :alt="item.track.title" class="size-12 rounded-lg" />
+            <div class="relative size-11 sm:size-12 shrink-0">
+              <SImg :src="item.track.cover" :alt="item.track.title" class="size-full rounded-lg" />
               <div
                 class="absolute inset-0 flex items-center justify-center rounded-lg bg-black/45 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
               >
@@ -220,8 +251,8 @@ const openDaily = (): void => {
               </div>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm text-on-surface">{{ item.track.title }}</div>
-              <div class="truncate text-xs text-on-surface-variant/50">
+              <div class="truncate text-xs sm:text-sm text-on-surface">{{ item.track.title }}</div>
+              <div class="truncate text-[11px] sm:text-xs text-on-surface-variant/50">
                 {{ artistName(item.track) }}
               </div>
             </div>

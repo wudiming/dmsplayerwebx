@@ -72,4 +72,28 @@ export default defineConfig({
       },
     },
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("@pixi")) {
+              return "vendor-pixi";
+            }
+            if (id.includes("lyric-kit") || id.includes("@applemusic-like-lyrics") || id.includes("lyric-dom")) {
+              return "vendor-lyrics";
+            }
+            if (id.includes("reka-ui")) {
+              return "vendor-ui";
+            }
+            if (id.includes("vue") || id.includes("pinia")) {
+              return "vendor-vue";
+            }
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
+  },
 });
+

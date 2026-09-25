@@ -4,10 +4,13 @@ import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useOrpheusProtocol } from "@/composables/useOrpheusProtocol";
 import { useExternalFileHandler } from "@/composables/useExternalFileHandler";
+import { useResponsive } from "@/composables/useResponsive";
+import SDrawer from "@/components/ui/SDrawer.vue";
 
 const route = useRoute();
 const status = useStatusStore();
 const settings = useSettingsStore();
+const { isMobile, isSmallScreen, mobileSidebarOpen, closeMobileSidebar } = useResponsive();
 
 // 接入 orpheus 协议唤起与外部音频文件播放
 useOrpheusProtocol();
@@ -17,6 +20,10 @@ useExternalFileHandler();
 const showPlayerBar = computed(() => !!useMediaStore().track);
 const { isPlayerExpanded } = storeToRefs(status);
 const { appearance } = settings;
+
+/** 侧边栏实际是否折叠（PC 非全屏/小窗口自动折叠为图标模式，全屏按用户设置） */
+const isSidebarCollapsed = computed(() => isSmallScreen.value || appearance.sidebarCollapsed);
+const sidebarWidthClass = computed(() => (isSidebarCollapsed.value ? "w-16" : "w-60"));
 
 /** 路由切换动效 */
 const routeTransitionName = computed(() => {
@@ -84,14 +91,19 @@ const sidebarClass = computed(() => {
 });
 
 /** 主界面底部边距 */
-const mainMarginClass = computed(() =>
-  showPlayerBar.value && appearance.layoutMode !== "floating" ? "mb-20" : "",
-);
+const mainMarginClass = computed(() => {
+  if (!showPlayerBar.value) return "";
+  if (isMobile.value) return "mb-16";
+  return appearance.layoutMode !== "floating" ? "mb-20" : "";
+});
 
 /** 外层播放条样式 */
 const playerBarWrapperClass = computed(() => {
   const base = "fixed bottom-0 z-50 transition-[left] duration-300 pointer-events-none";
-  const collapsed = appearance.sidebarCollapsed;
+  if (isMobile.value) {
+    return `${base} left-0 right-0`;
+  }
+  const collapsed = isSidebarCollapsed.value;
   switch (appearance.layoutMode) {
     case "sidebar-full":
       return `${base} ${collapsed ? "left-16" : "left-60"} right-0`;
@@ -106,6 +118,9 @@ const playerBarWrapperClass = computed(() => {
 const playerBarInnerClass = computed(() => {
   // 禁用底部播放栏交互
   const base = isPlayerExpanded.value ? "pointer-events-none" : "pointer-events-auto";
+  if (isMobile.value) {
+    return `${base} h-16 bg-surface-panel/95 backdrop-blur-xl border-t border-t-solid border-t-primary/10`;
+  }
   switch (appearance.layoutMode) {
     case "floating":
       return `${base} mx-auto max-w-4xl glass-panel rounded-full shadow-xl border border-solid border-primary/10`;
@@ -121,18 +136,31 @@ const playerBarInnerClass = computed(() => {
     class="h-screen flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
     :class="isPlayerExpanded ? 'scale-95 opacity-0 pointer-events-none' : ''"
   >
-    <!-- 侧边栏 -->
+    <!-- 桌面侧边栏 (在 md 及以上屏幕显示，小窗口自动收缩为图标导航) -->
     <aside
-      class="shrink-0 bg-surface-panel overflow-y-auto z-10 transition-[width,margin] duration-300"
-      :class="[appearance.sidebarCollapsed ? 'w-16' : 'w-60', sidebarClass]"
+      class="hidden md:block shrink-0 bg-surface-panel overflow-y-auto z-10 transition-[width,margin] duration-300"
+      :class="[sidebarWidthClass, sidebarClass]"
     >
-      <SideBar />
+      <SideBar :collapsed="isSidebarCollapsed" />
     </aside>
+
+    <!-- 移动端侧滑抽屉 (在手机端点菜单呼出完整侧边栏) -->
+    <SDrawer
+      v-model:open="mobileSidebarOpen"
+      side="left"
+      width="min(300px, 82vw)"
+      :closable="false"
+      title="导航菜单"
+    >
+      <div class="h-full bg-surface-panel overflow-y-auto">
+        <SideBar :collapsed="false" @navigate="closeMobileSidebar" />
+      </div>
+    </SDrawer>
 
     <!-- 右侧主区域 -->
     <div class="flex-1 flex flex-col min-w-0" :class="mainMarginClass">
       <!-- 顶部导航 -->
-      <header class="h-16 shrink-0 flex items-center px-3">
+      <header class="h-14 sm:h-16 shrink-0 flex items-center px-2 sm:px-4">
         <NavHeader />
       </header>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useDetailModalStore } from "@/stores/detailModal";
+import { useResponsive } from "@/composables/useResponsive";
 import IconLucideX from "~icons/lucide/x";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
@@ -14,6 +15,7 @@ const Daily = defineAsyncComponent(() => import("@/pages/Daily.vue"));
 
 const detailModal = useDetailModalStore();
 const { isOpen, currentTarget, canBack, targetKey } = storeToRefs(detailModal);
+const { isMobile } = useResponsive();
 
 const { t } = useI18n();
 
@@ -61,17 +63,22 @@ const handleOpenUpdate = (open: boolean): void => {
       display: 'flex',
       flexDirection: 'column',
     }"
-    width="min(1120px, calc(100vw - 48px))"
-    height="86vh"
+    :width="isMobile ? '100vw' : 'min(1120px, calc(100vw - 48px))'"
+    :height="isMobile ? '100dvh' : '86vh'"
+    :dialog-class="
+      isMobile
+        ? '!rounded-none !border-0 !inset-0 !translate-x-0 !translate-y-0 !w-full !h-full !max-w-none'
+        : undefined
+    "
     destroy-on-close
     @update:open="handleOpenUpdate"
   >
     <!-- 悬浮窗顶栏操作栏 -->
     <div
-      class="h-13 shrink-0 flex items-center justify-between px-5 border-b border-solid border-primary/10 select-none bg-surface-panel/60 backdrop-blur-md"
+      class="h-11 sm:h-13 shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-solid border-primary/10 select-none bg-surface-panel/60 backdrop-blur-md"
     >
       <!-- 左侧：返回上一级 + 类型标签 + 标题 -->
-      <div class="flex items-center gap-2.5 min-w-0">
+      <div class="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <SButton
           v-if="canBack"
           variant="ghost"
@@ -86,14 +93,14 @@ const handleOpenUpdate = (open: boolean): void => {
           </template>
         </SButton>
 
-        <STag v-if="typeMeta.label" type="primary" size="small" round class="gap-1 font-medium">
+        <STag v-if="typeMeta.label" type="primary" size="small" round class="gap-1 font-medium shrink-0">
           <component :is="typeMeta.icon" v-if="typeMeta.icon" class="size-3.5" />
           <span>{{ typeMeta.label }}</span>
         </STag>
 
         <span
           v-if="currentTarget && 'name' in currentTarget && currentTarget.name"
-          class="truncate text-sm font-semibold text-on-surface-variant/80 max-w-sm"
+          class="truncate text-sm font-semibold text-on-surface-variant/80 max-w-[150px] sm:max-w-sm"
         >
           {{ currentTarget.name }}
         </span>

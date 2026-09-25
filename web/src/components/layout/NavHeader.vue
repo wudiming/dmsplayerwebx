@@ -3,13 +3,14 @@ import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { useWindowControls } from "@/composables/useWindowControls";
 import { useThemeStore } from "@/stores/theme";
 import { useUpdateStore } from "@/stores/update";
+import { mobileSidebarOpen } from "@/composables/useResponsive";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import IconSun from "~icons/lucide/sun";
 import IconMoon from "~icons/lucide/moon";
 import IconMonitor from "~icons/lucide/monitor";
 import IconRefreshCw from "~icons/lucide/refresh-cw";
 import IconSettings from "~icons/lucide/settings";
-import IconScaling from "~icons/lucide/scaling";
+import IconLucideMenu from "~icons/lucide/menu";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -18,38 +19,41 @@ const theme = useThemeStore();
 const update = useUpdateStore();
 const { isBorderless } = useWindowControls();
 
-/** 界面缩放弹窗开关 */
-const uiZoomOpen = ref(false);
-
-const themeIcon = computed(() => {
-  if (theme.mode === "light") return IconMoon;
-  if (theme.mode === "dark") return IconMonitor;
-  return IconSun;
-});
-
-const themeLabel = computed(() => {
-  if (theme.mode === "light") return t("settings.themeMode.dark");
-  if (theme.mode === "dark") return t("settings.themeMode.system");
-  return t("settings.themeMode.light");
-});
-
 const menuItems = computed<DropdownMenuItem[]>(() => [
   {
-    key: "theme",
-    label: themeLabel.value,
-    icon: themeIcon.value,
+    key: "theme:light",
+    label: t("settings.themeMode.light"),
+    icon: IconSun,
+    active: theme.mode === "light",
     disabled: theme.appearanceStyle === "image",
   },
-  { key: "uiZoom", label: t("uiZoom.title"), icon: IconScaling },
+  {
+    key: "theme:dark",
+    label: t("settings.themeMode.dark"),
+    icon: IconMoon,
+    active: theme.mode === "dark",
+    disabled: theme.appearanceStyle === "image",
+  },
+  {
+    key: "theme:system",
+    label: t("settings.themeMode.system"),
+    icon: IconMonitor,
+    active: theme.mode === "system",
+    disabled: theme.appearanceStyle === "image",
+  },
   { key: "reload", label: t("nav.reload"), icon: IconRefreshCw, separator: true },
   { key: "settings", label: t("nav.globalSettings"), icon: IconSettings },
 ]);
 
 const onMenuSelect = (key: string): void => {
-  if (key === "theme") theme.cycleMode();
-  else if (key === "reload") location.reload();
-  else if (key === "uiZoom") uiZoomOpen.value = true;
-  else if (key === "settings") showSettings();
+  if (key.startsWith("theme:")) {
+    const targetMode = key.replace("theme:", "") as "light" | "dark" | "system";
+    theme.mode = targetMode;
+  } else if (key === "reload") {
+    location.reload();
+  } else if (key === "settings") {
+    showSettings();
+  }
 };
 </script>
 
@@ -57,6 +61,17 @@ const onMenuSelect = (key: string): void => {
   <div class="flex items-center justify-between flex-1 h-full min-w-0 app-drag-region">
     <!-- 左侧 -->
     <div class="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+      <SButton
+        class="app-no-drag shrink-0 md:hidden"
+        variant="tertiary"
+        circle
+        :size="40"
+        :icon-size="20"
+        aria-label="Menu"
+        @click="mobileSidebarOpen = true"
+      >
+        <template #icon><IconLucideMenu /></template>
+      </SButton>
       <NavSearch />
       <SButton
         v-if="update.hasUpdate"
@@ -84,6 +99,5 @@ const onMenuSelect = (key: string): void => {
         </template>
       </SDropdownMenu>
     </div>
-    <UiZoomDialog v-model:open="uiZoomOpen" />
   </div>
 </template>

@@ -271,28 +271,28 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex flex-col h-full">
     <!-- 头部信息 -->
-    <div v-if="collection" class="shrink-0 px-5 pb-2">
+    <div v-if="collection" class="shrink-0 px-3.5 sm:px-5 pb-2">
       <div
         class="flex mt-2 transition-[gap,margin] duration-300"
-        :class="collapsed ? 'gap-3' : 'gap-5'"
+        :class="collapsed ? 'gap-2.5 sm:gap-3' : 'gap-3 sm:gap-5'"
       >
         <!-- 封面 -->
         <SImg
           :src="collection.cover"
           :alt="collection.title"
           class="rounded-xl shrink-0 transition-[width,height] duration-300"
-          :class="collapsed ? 'size-20' : 'size-40'"
+          :class="collapsed ? 'size-16 sm:size-20' : 'size-28 sm:size-40'"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0">
           <div
             class="flex flex-col transition-[gap] duration-300"
-            :class="collapsed ? 'gap-0.5' : 'gap-2'"
+            :class="collapsed ? 'gap-0.5' : 'gap-1.5 sm:gap-2'"
           >
-            <div class="flex min-w-0 items-center gap-3">
+            <div class="flex min-w-0 items-center gap-2 sm:gap-3">
               <h1
                 class="min-w-0 flex-1 font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
-                :class="collapsed ? 'text-xl' : 'text-3xl'"
+                :class="collapsed ? 'text-lg sm:text-xl' : 'text-xl sm:text-3xl'"
               >
                 {{ collection.title }}
               </h1>
@@ -301,7 +301,7 @@ onBeforeUnmount(() => {
               class="grid transition-[grid-template-rows,opacity] duration-300"
               :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
             >
-              <div class="overflow-hidden flex flex-col gap-2">
+              <div class="overflow-hidden flex flex-col gap-1.5 sm:gap-2">
                 <!-- 简介 -->
                 <SButton
                   v-if="collection.description"
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
                   size="auto"
                   block
                   static
-                  class="group max-w-full overflow-hidden text-left text-sm"
+                  class="group max-w-full overflow-hidden text-left text-xs sm:text-sm"
                   :aria-label="t('collection.viewIntroduction')"
                   @click="descriptionOpen = true"
                 >
@@ -319,26 +319,26 @@ onBeforeUnmount(() => {
                     {{ collection.description }}
                   </span>
                 </SButton>
-                <p v-else class="text-sm text-on-surface-variant/70 truncate">
+                <p v-else class="text-xs sm:text-sm text-on-surface-variant/70 truncate">
                   {{ t("collection.noDescription") }}
                 </p>
                 <div
-                  class="flex items-center gap-3 text-sm leading-none text-on-surface-variant/50"
+                  class="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm leading-none text-on-surface-variant/50"
                 >
                   <span v-if="creatorText" class="flex items-center gap-1 min-w-0">
-                    <IconLucideUser class="shrink-0" />
+                    <IconLucideUser class="shrink-0 size-3 sm:size-3.5" />
                     <span class="truncate">{{ creatorText }}</span>
                   </span>
                   <span class="flex items-center gap-1 shrink-0">
-                    <IconLucideListMusic class="shrink-0" />
+                    <IconLucideListMusic class="shrink-0 size-3 sm:size-3.5" />
                     {{ t("common.totalSongs", { count: collection.tracks.length }) }}
                   </span>
-                  <span v-if="totalDuration" class="flex items-center gap-1 shrink-0">
-                    <IconLucideHourglass class="shrink-0" />
+                  <span v-if="totalDuration" class="hidden sm:flex items-center gap-1 shrink-0">
+                    <IconLucideHourglass class="shrink-0 size-3 sm:size-3.5" />
                     {{ t("collection.totalDuration", { time: totalDuration }) }}
                   </span>
-                  <span v-if="updateTimeText" class="flex items-center gap-1 shrink-0">
-                    <IconLucideCalendar class="shrink-0" />
+                  <span v-if="updateTimeText" class="hidden md:flex items-center gap-1 shrink-0">
+                    <IconLucideCalendar class="shrink-0 size-3 sm:size-3.5" />
                     {{ updateTimeText }}
                   </span>
                 </div>
@@ -346,8 +346,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <!-- 操作栏 -->
-          <div class="mt-auto flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
+          <div class="mt-auto flex items-center justify-between gap-2 sm:gap-4 pt-1 sm:pt-0">
+            <div class="flex items-center gap-2 sm:gap-3">
               <SButton
                 type="primary"
                 variant="secondary"
@@ -399,7 +399,7 @@ onBeforeUnmount(() => {
               :placeholder="t('common.search')"
               clearable
               round
-              class="w-40 focus-within:w-56"
+              class="w-32 sm:w-40 focus-within:w-44 sm:focus-within:w-56 hidden sm:flex"
               data-search-input
             >
               <template #prefix>

@@ -15,6 +15,7 @@ import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
 import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
+import { useResponsive } from "@/composables/useResponsive";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import * as player from "@/core/player";
 import IconArrowUpDown from "~icons/lucide/arrow-up-down";
@@ -85,8 +86,12 @@ const media = useMediaStore();
 const status = useStatusStore();
 const settings = useSettingsStore();
 const fav = useFavorite();
+const { isMobile } = useResponsive();
 
 const { isFloatingBar: isFloatingPlayerBar, PLAYER_BAR_GAP } = useFloatingPlayerBar();
+
+/** 列表单项高度：移动端紧凑高密度(60px)，桌面端呼吸感卡片(88px) */
+const itemHeight = computed(() => (isMobile.value ? 60 : 88));
 
 /** 排序器 默认使用 base 敏感度，忽略大小写 */
 const textCollator = new Intl.Collator(undefined, {
@@ -319,8 +324,8 @@ defineExpose({
       <SVirtualList
         ref="virtualListRef"
         :items="sortedItems"
-        :item-height="88"
-        :padding-bottom="isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
+        :item-height="itemHeight"
+        :padding-bottom="isMobile ? 72 : isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
         :get-item-key="(item: Track) => item.id"
         item-fixed
         height="100%"
@@ -439,10 +444,10 @@ defineExpose({
                 <span>{{ t("songList.batch.exit") }}</span>
               </SButton>
             </div>
-            <!-- 普通模式 -->
+            <!-- 桌面端普通表头 -->
             <div
-              v-else
-              class="flex items-center gap-3 pl-3 pr-6 mx-3 h-10 text-sm text-on-surface-variant/60"
+              v-else-if="!isMobile"
+              class="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-3 pr-2.5 sm:pr-6 mx-1 sm:mx-3 h-10 text-sm text-on-surface-variant/60"
             >
               <div v-if="showIndex" class="w-8 shrink-0 flex items-center justify-center">
                 <span>#</span>
@@ -501,21 +506,83 @@ defineExpose({
                   {{ t("songList.title") }}
                 </div>
               </div>
-              <div v-if="showAlbum" class="flex-1 min-w-0">{{ t("songList.album") }}</div>
+              <div v-if="showAlbum" class="flex-1 min-w-0 hidden md:block">
+                {{ t("songList.album") }}
+              </div>
               <div class="w-7 shrink-0 text-center">{{ t("songList.actions") }}</div>
               <div v-if="showDuration" class="w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
-              <div v-if="showSize" class="w-16 shrink-0 text-center">{{ t("songList.size") }}</div>
+              <div v-if="showSize" class="w-16 shrink-0 text-center hidden lg:block">
+                {{ t("songList.size") }}
+              </div>
+            </div>
+            <!-- 移动端轻量排序栏（避免浪费高度与横向空间） -->
+            <div
+              v-else-if="enableSort"
+              class="flex items-center justify-between px-3 h-8 text-xs text-on-surface-variant/70 select-none border-b border-solid border-primary/10 mb-1"
+            >
+              <span class="text-on-surface-variant/60 font-medium">
+                {{ t("common.totalSongs", { count: sortedItems.length }) }}
+              </span>
+              <SPopover
+                :side-offset="4"
+                trigger="click"
+                side="bottom"
+                align="end"
+              >
+                <template #trigger>
+                  <button
+                    type="button"
+                    class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-on-surface/6 hover:bg-on-surface/10 text-xs text-on-surface-variant transition-colors active:scale-95"
+                  >
+                    <IconArrowUpDown class="size-3" />
+                    <span>{{ sortField === 'none' ? t('songList.sort.default') : t(sortFieldLabelKeyMap[sortField]) }}</span>
+                  </button>
+                </template>
+                <div class="w-60 flex flex-col gap-3 text-sm p-3">
+                  <div class="flex items-center gap-2 text-xs font-semibold">
+                    <IconArrowUpDown class="size-3.5" />
+                    <span>{{ t("songList.sort.mode") }}</span>
+                  </div>
+                  <SRadioGroup v-model:value="sortField" size="small">
+                    <SRadio value="none" :label="t('songList.sort.default')" />
+                    <SRadio value="title" :label="t('songList.sort.byTitle')" />
+                    <SRadio value="artist" :label="t('songList.sort.byArtist')" />
+                    <SRadio value="album" :label="t('songList.sort.byAlbum')" />
+                    <SRadio value="path" :label="t('songList.sort.byPath')" />
+                    <SRadio value="duration" :label="t('songList.sort.byDuration')" />
+                    <SRadio value="size" :label="t('songList.sort.bySize')" />
+                    <SRadio value="mtime" :label="t('songList.sort.byMtime')" />
+                    <SRadio value="ctime" :label="t('songList.sort.byCtime')" />
+                    <SRadio value="track" :label="t('songList.sort.byTrack')" />
+                  </SRadioGroup>
+
+                  <div class="h-px bg-outline-variant/25" />
+
+                  <div class="flex items-center gap-2 text-xs font-semibold">
+                    <IconArrowUpAz class="size-3.5" />
+                    <span>{{ t("songList.sort.order") }}</span>
+                  </div>
+                  <SRadioGroup
+                    v-model:value="sortOrder"
+                    size="small"
+                    :disabled="sortField === 'none'"
+                  >
+                    <SRadio value="asc" :label="t('songList.sort.asc')" />
+                    <SRadio value="desc" :label="t('songList.sort.desc')" />
+                  </SRadioGroup>
+                </div>
+              </SPopover>
             </div>
           </div>
         </template>
         <!-- 列表项 -->
         <template #default="{ item, index }: { item: Track; index: number }">
-          <div class="px-3 pb-3">
+          <div class="px-1.5 sm:px-3 pb-1.5 sm:pb-3">
             <div
               data-song-item
-              class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl cursor-pointer border-2 border-solid transition-[background-color,border-color] duration-200"
+              class="group flex items-center gap-1.5 sm:gap-3 pl-1.5 sm:pl-3 pr-2 sm:pr-6 h-[54px] sm:h-19 rounded-lg sm:rounded-xl cursor-pointer border sm:border-2 border-solid transition-[background-color,border-color] duration-200"
               :class="
                 batch.active.value
                   ? batch.selectedIds.value.has(item.id)
@@ -525,20 +592,26 @@ defineExpose({
                     ? 'bg-primary/16 border-primary/40'
                     : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12'
               "
-              @click="batch.active.value ? batch.toggle(item.id) : undefined"
+              @click="
+                batch.active.value
+                  ? batch.toggle(item.id)
+                  : isMobile
+                    ? onTrackDblClick(item, index)
+                    : undefined
+              "
               @dblclick="onTrackDblClick(item, index)"
               @contextmenu="contextTrack = item"
             >
               <!-- 序号 / 多选 -->
               <div
                 v-if="showIndex"
-                class="w-8 shrink-0 flex items-center justify-center relative"
+                class="w-6 sm:w-8 shrink-0 flex items-center justify-center relative text-xs sm:text-sm font-semibold tabular-nums"
                 :class="
                   batch.active.value
                     ? ''
                     : playingId === item.id
                       ? 'text-primary'
-                      : 'text-on-surface-variant'
+                      : 'text-on-surface-variant/70'
                 "
                 @click.stop="
                   batch.active.value
@@ -560,46 +633,48 @@ defineExpose({
                 <template v-else>
                   <span
                     v-if="playingId !== item.id"
-                    class="text-sm font-bold tabular-nums group-hover:opacity-0 transition-opacity duration-300"
+                    class="group-hover:opacity-0 transition-opacity duration-300"
                   >
                     {{ index + 1 }}
                   </span>
                   <IconLucideMusic
                     v-else
-                    class="size-5 group-hover:opacity-0 transition-opacity duration-300"
+                    class="size-3.5 sm:size-5 group-hover:opacity-0 transition-opacity duration-300"
                   />
                   <div
                     class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-[opacity,transform] duration-300 group-hover:scale-100 scale-80 cursor-pointer"
                   >
                     <IconLucidePause
                       v-if="playingId === item.id && status.isPlaying"
-                      class="size-5"
+                      class="size-4 sm:size-5"
                     />
-                    <IconLucidePlay v-else class="size-5" />
+                    <IconLucidePlay v-else class="size-4 sm:size-5" />
                   </div>
                 </template>
               </div>
-              <!-- 信息 -->
-              <div class="flex-1 min-w-0 flex items-center gap-3">
-                <SImg :src="item.cover" class="size-12 rounded-lg shrink-0" />
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-baseline gap-1.5 min-w-0">
+
+              <!-- 信息区 -->
+              <div class="flex-1 min-w-0 flex items-center gap-2 sm:gap-3">
+                <SImg :src="item.cover" class="size-10 sm:size-12 rounded-md sm:rounded-lg shrink-0 object-cover" />
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                  <!-- 歌名 -->
+                  <div class="flex items-baseline gap-1 sm:gap-1.5 min-w-0">
                     <span
-                      class="text-base font-medium truncate"
+                      class="text-sm sm:text-base font-medium truncate leading-snug"
                       :class="playingId === item.id ? 'text-primary' : ''"
                     >
                       {{ item.title }}
                     </span>
                     <IconLucideCloud
                       v-if="item.cloud"
-                      class="size-3.5 shrink-0 self-center"
+                      class="size-3 sm:size-3.5 shrink-0 self-center"
                       :class="
                         playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant/60'
                       "
                     />
                     <span
                       v-if="item.comment && settings.preset.showSubtitle"
-                      class="flex-1 min-w-0 text-base truncate"
+                      class="flex-1 min-w-0 text-xs sm:text-sm truncate"
                       :class="
                         playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant/60'
                       "
@@ -607,13 +682,15 @@ defineExpose({
                       ({{ item.comment }})
                     </span>
                   </div>
+
+                  <!-- 标签与歌手 -->
                   <div
-                    class="text-sm mt-1 truncate flex items-center gap-1"
-                    :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface-variant'"
+                    class="text-xs sm:text-sm mt-0.5 sm:mt-1 truncate flex items-center gap-1 leading-normal"
+                    :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface-variant/80'"
                   >
                     <span
                       v-if="item.quality && !settings.preset.hideQualityTag"
-                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid"
+                      class="shrink-0 px-1 rounded text-[9px] sm:text-[10px] leading-[15px] sm:leading-[18px] font-bold border border-solid"
                       :class="
                         isLosslessQuality(item.quality)
                           ? 'text-amber-500 border-amber-500/40'
@@ -624,13 +701,13 @@ defineExpose({
                     </span>
                     <span
                       v-if="item.fee === 1 && !settings.preset.hideVipTag"
-                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-red-400 border-red-400/40"
+                      class="shrink-0 px-1 rounded text-[9px] sm:text-[10px] leading-[15px] sm:leading-[18px] font-bold border border-solid text-red-400 border-red-400/40"
                     >
                       VIP
                     </span>
                     <span
                       v-else-if="item.fee === 4 && !settings.preset.hideVipTag"
-                      class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid text-red-400 border-red-400/40"
+                      class="shrink-0 px-1 rounded text-[9px] sm:text-[10px] leading-[15px] sm:leading-[18px] font-bold border border-solid text-red-400 border-red-400/40"
                     >
                       EP
                     </span>
@@ -641,7 +718,7 @@ defineExpose({
                           :class="
                             isArtistLinkable(item, artist)
                               ? 'cursor-pointer hover:opacity-70'
-                              : 'opacity-50'
+                              : 'opacity-70'
                           "
                           @click.stop="goArtist(item, artist)"
                         >
@@ -656,10 +733,11 @@ defineExpose({
                   </div>
                 </div>
               </div>
+
               <!-- 专辑 -->
               <div
                 v-if="showAlbum"
-                class="flex-1 min-w-0 truncate text-sm"
+                class="flex-1 min-w-0 truncate text-sm hidden md:block"
                 :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface'"
               >
                 <span
@@ -670,6 +748,7 @@ defineExpose({
                   {{ item.album?.name || t("collection.unknownAlbum") }}
                 </span>
               </div>
+
               <!-- 红心：批量模式下隐藏，其余始终显示 -->
               <div
                 v-if="!batch.active.value"
@@ -680,8 +759,8 @@ defineExpose({
                   type="primary"
                   variant="text"
                   circle
-                  :size="28"
-                  :icon-size="20"
+                  :size="26"
+                  :icon-size="18"
                   @click="fav.toggle(item)"
                 >
                   <template #icon>
@@ -693,18 +772,20 @@ defineExpose({
                 </SButton>
               </div>
               <div v-else class="w-7 shrink-0" />
-              <!-- 时长 -->
+
+              <!-- 时长 (移动端隐藏，把宝贵横向宽度留给歌名与歌手) -->
               <div
                 v-if="showDuration"
-                class="w-16 shrink-0 text-center text-sm tabular-nums"
+                class="w-16 shrink-0 text-center text-sm tabular-nums hidden sm:block"
                 :class="playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant'"
               >
                 {{ formatTime(item.duration) }}
               </div>
+
               <!-- 文件大小 -->
               <div
                 v-if="showSize"
-                class="w-16 shrink-0 text-center text-sm tabular-nums"
+                class="w-16 shrink-0 text-center text-sm tabular-nums hidden lg:block"
                 :class="playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant'"
               >
                 {{ item.fileSize ? formatFileSize(item.fileSize) : "" }}
@@ -733,8 +814,8 @@ defineExpose({
     </SContextMenu>
     <!-- 浮动按钮 -->
     <div
-      class="absolute right-6 z-20 flex flex-col gap-3 transition-[bottom] duration-300"
-      :class="isFloatingPlayerBar ? 'bottom-26' : 'bottom-5'"
+      class="absolute right-3.5 sm:right-6 z-20 flex flex-col gap-2.5 sm:gap-3 transition-[bottom] duration-300"
+      :class="isMobile ? 'bottom-3' : isFloatingPlayerBar ? 'bottom-26' : 'bottom-5'"
     >
       <!-- 回到顶部 -->
       <Transition name="fade">
@@ -746,11 +827,11 @@ defineExpose({
             type="primary"
             variant="bordered"
             circle
-            :size="40"
+            :size="isMobile ? 36 : 40"
             @click="virtualListRef?.scrollTo(0)"
           >
             <template #icon>
-              <IconLucideArrowUp class="size-4.5" />
+              <IconLucideArrowUp class="size-4 sm:size-4.5" />
             </template>
           </SButton>
         </div>
@@ -761,9 +842,15 @@ defineExpose({
           v-if="playingIndex >= 0 && !batch.active.value"
           class="rounded-full bg-surface-panel backdrop-blur-2xl backdrop-saturate-150 shadow-lg border border-solid border-primary/10"
         >
-          <SButton type="primary" variant="bordered" circle :size="40" @click="scrollToPlaying">
+          <SButton
+            type="primary"
+            variant="bordered"
+            circle
+            :size="isMobile ? 36 : 40"
+            @click="scrollToPlaying"
+          >
             <template #icon>
-              <IconLucideLocate class="size-4.5" />
+              <IconLucideLocate class="size-4 sm:size-4.5" />
             </template>
           </SButton>
         </div>

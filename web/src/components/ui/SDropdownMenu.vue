@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from "vue";
 import { usePopupZIndex } from "@/composables/useZIndex";
+import IconLucideCheck from "~icons/lucide/check";
 
 export interface DropdownMenuItem {
   /** 唯一标识 */
@@ -11,6 +12,8 @@ export interface DropdownMenuItem {
   icon?: Component;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 是否处于激活选中状态 */
+  active?: boolean;
   /** 是否显示 */
   show?: boolean;
   /** 分割线：在此项上方显示分割线 */
@@ -130,7 +133,8 @@ const menuItemClass = computed(() =>
                       v-if="child.icon"
                       class="size-3.5 opacity-60 shrink-0"
                     />
-                    <span>{{ child.label }}</span>
+                    <span class="flex-1">{{ child.label }}</span>
+                    <IconLucideCheck v-if="child.active" class="size-3.5 text-primary shrink-0 ml-1.5" />
                   </DropdownMenuItem>
                 </template>
               </DropdownMenuSubContent>
@@ -144,7 +148,8 @@ const menuItemClass = computed(() =>
             @select="handleSelect(item)"
           >
             <component :is="item.icon" v-if="item.icon" class="size-3.5 opacity-60 shrink-0" />
-            <span>{{ item.label }}</span>
+            <span class="flex-1">{{ item.label }}</span>
+            <IconLucideCheck v-if="item.active" class="size-3.5 text-primary shrink-0 ml-1.5" />
           </DropdownMenuItem>
         </template>
       </DropdownMenuContent>

@@ -381,12 +381,14 @@
   },
   "daily": {
     "title": "Daily Recommendations",
-    "tagline": "Curated daily at 6:00 based on your taste",
+    "tagline": "Based on your music taste",
     "today": "Today",
+    "yesterday": "Yesterday",
+    "dayBeforeYesterday": "Day Before",
     "refresh": "Refresh",
     "refreshSuccess": "Recommendations refreshed",
     "refreshFailed": "Failed to refresh recommendations",
-    "needLogin": "Please sign in to NetEase Cloud Music to view daily recommendations",
+    "needLogin": "Sign in to view daily recommendations",
     "empty": "No recommendations available"
   },
   "login": {
@@ -701,14 +703,6 @@
       "canceled": "Canceled",
       "interrupted": "Interrupted"
     }
-  },
-  "daily": {
-    "title": "Daily Recommend",
-    "tagline": "Based on your music taste",
-    "today": "Today",
-    "refresh": "Refresh",
-    "empty": "No daily recommendations available",
-    "needLogin": "Sign in to see daily recommendations"
   },
   "favorites": {
     "title": "Favorites",

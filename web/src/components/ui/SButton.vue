@@ -199,8 +199,8 @@ const variantStyles = {
 
 /** 计算按钮的变体类 */
 const variantClass = computed(() => {
-  const styles = variantStyles[props.variant];
-  const semanticType = props.type in styles ? props.type : "default";
+  const styles = variantStyles[props.variant] ?? variantStyles.filled;
+  const semanticType = styles && props.type in styles ? props.type : "default";
   const classes: string[] = [styles[semanticType]];
   if (props.dashed && (props.variant === "outline" || props.variant === "bordered")) {
     classes.push("border-dashed");
@@ -213,7 +213,7 @@ const variantClass = computed(() => {
   <button
     v-ripple="enableRipple"
     :disabled="isDisabled"
-    class="s-button inline-flex items-center gap-1.5 font-sans select-none outline-none cursor-pointer transition-[color,background-color,border-color,opacity,transform] duration-200 disabled:cursor-not-allowed disabled:op-50"
+    class="s-button inline-flex items-center gap-1.5 font-sans select-none outline-none cursor-pointer whitespace-nowrap transition-[color,background-color,border-color,opacity,transform] duration-200 disabled:cursor-not-allowed disabled:op-50"
     :class="[
       block && 'w-full',
       strong && 'font-semibold',

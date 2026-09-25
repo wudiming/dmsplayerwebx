@@ -302,6 +302,14 @@ watch(
   },
 );
 
+watch(
+  () => props.itemHeight,
+  () => {
+    initializeHeights();
+    calculateVisibleRange(scrollTop.value);
+  },
+);
+
 watch(viewportHeight, () => {
   calculateVisibleRange(scrollTop.value);
 });
