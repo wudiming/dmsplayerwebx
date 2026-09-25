@@ -93,14 +93,19 @@ const sidebarClass = computed(() => {
 /** 主界面底部边距 */
 const mainMarginClass = computed(() => {
   if (!showPlayerBar.value) return "";
-  if (isMobile.value) return "mb-16";
+  if (isMobile.value) {
+    return appearance.layoutMode === "floating" ? "mb-22" : "mb-16";
+  }
   return appearance.layoutMode !== "floating" ? "mb-20" : "";
 });
 
 /** 外层播放条样式 */
 const playerBarWrapperClass = computed(() => {
-  const base = "fixed bottom-0 z-50 transition-[left] duration-300 pointer-events-none";
+  const base = "fixed bottom-0 z-50 transition-all duration-300 pointer-events-none";
   if (isMobile.value) {
+    if (appearance.layoutMode === "floating") {
+      return `${base} left-0 right-0 px-3 pb-[max(10px,env(safe-area-inset-bottom))]`;
+    }
     return `${base} left-0 right-0`;
   }
   const collapsed = isSidebarCollapsed.value;
@@ -119,7 +124,10 @@ const playerBarInnerClass = computed(() => {
   // 禁用底部播放栏交互
   const base = isPlayerExpanded.value ? "pointer-events-none" : "pointer-events-auto";
   if (isMobile.value) {
-    return `${base} h-16 bg-surface-panel/95 backdrop-blur-xl border-t border-t-solid border-t-primary/10`;
+    if (appearance.layoutMode === "floating") {
+      return `${base} h-15 mx-auto max-w-lg bg-surface-panel/92 backdrop-blur-2xl rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.22)] border border-solid border-primary/25 overflow-hidden transition-all duration-300`;
+    }
+    return `${base} h-16 bg-surface-panel/95 backdrop-blur-xl border-t border-t-solid border-t-primary/10 transition-all duration-300`;
   }
   switch (appearance.layoutMode) {
     case "floating":

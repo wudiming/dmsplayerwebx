@@ -99,9 +99,9 @@ export const useCloudUploadStore = defineStore("cloudUpload", () => {
                 ? i18n.global.t("cloud.upload.errorWithCode", { code: res.errorCode })
                 : i18n.global.t("cloud.upload.error");
           }
-        } catch {
+        } catch (err: any) {
           next.status = "error";
-          next.error = i18n.global.t("cloud.upload.error");
+          next.error = err?.message || i18n.global.t("cloud.upload.error");
         }
       }
     } finally {

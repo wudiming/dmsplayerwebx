@@ -265,6 +265,58 @@ export const handleApiRequest = async (
     }
   }
 
+  // 2.3 网易云音乐 NOS 存储桶上传代理兜底 (支持分片流式透传)
+  if (pathname === "/api/proxy/nos-upload" && req.method === "POST") {
+    const targetUrl = urlObj.searchParams.get("url");
+    if (!targetUrl) {
+      sendJson(res, 400, { error: "Missing url parameter" });
+      return;
+    }
+
+    try {
+      const parsed = new URL(targetUrl);
+      const isHttps = parsed.protocol === "https:";
+      const client = isHttps ? (await import("node:https")).default : (await import("node:http")).default;
+
+      const upstreamReq = client.request(
+        parsed,
+        {
+          method: "POST",
+          headers: {
+            "x-nos-token": (req.headers["x-nos-token"] as string) || "",
+            "Content-MD5": (req.headers["content-md5"] as string) || "",
+            "Content-Type": (req.headers["content-type"] as string) || "audio/mpeg",
+            "Content-Length": (req.headers["content-length"] as string) || "",
+          },
+          timeout: 300000,
+        },
+        (upstreamRes) => {
+          const chunks: Buffer[] = [];
+          upstreamRes.on("data", (c) => chunks.push(c));
+          upstreamRes.on("end", () => {
+            const status = upstreamRes.statusCode ?? 200;
+            res.writeHead(status, {
+              "Content-Type": "application/json; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+            });
+            res.end(Buffer.concat(chunks));
+          });
+        },
+      );
+
+      upstreamReq.on("error", (err) => {
+        coreLog.error("[nos-proxy] upstream error:", err);
+        sendJson(res, 502, { error: err.message });
+      });
+
+      req.pipe(upstreamReq);
+      return;
+    } catch (err: any) {
+      sendJson(res, 500, { error: err?.message || "Internal error" });
+      return;
+    }
+  }
+
   // 从 Header 或 Body 解析当前客户端浏览器隔离的 Session Cookies 与用户配置
   let clientCookies: Record<string, Record<string, string>> = {};
   const headerRaw = req.headers["x-splayer-cookies"];

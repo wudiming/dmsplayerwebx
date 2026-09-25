@@ -280,13 +280,9 @@ const onListContextMenu = (event: MouseEvent): void => {
  * @param item - 歌曲数据
  * @param index - 列表索引
  */
-const onTrackDblClick = (item: Track, index: number): void => {
+const onTrackDblClick = (item: Track, _index: number): void => {
   if (batch.active.value) return;
-  if (route.name === "search" && settings.player.searchPlayBehavior !== "all") {
-    void player.playNow(item, props.playbackContext);
-    return;
-  }
-  void player.playFrom(sortedItems.value, index, props.playbackContext);
+  void player.playNow(item, props.playbackContext);
 };
 
 const emit = defineEmits<{
@@ -325,7 +321,7 @@ defineExpose({
         ref="virtualListRef"
         :items="sortedItems"
         :item-height="itemHeight"
-        :padding-bottom="isMobile ? 72 : isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
+        :padding-bottom="isMobile ? (isFloatingPlayerBar ? 92 : 72) : isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
         :get-item-key="(item: Track) => item.id"
         item-fixed
         height="100%"

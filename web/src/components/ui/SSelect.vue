@@ -52,8 +52,8 @@ const handleChange = (val: string) => {
       class="group flex w-full items-center justify-between gap-2 h-8.5 px-3 text-sm text-on-surface bg-field border border-solid border-on-surface/20 cursor-pointer outline-none focus-visible:outline-none transition-[border-color,box-shadow,opacity] duration-250 hover:border-on-surface/50 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/25 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
       :class="round ? 'rounded-full' : 'rounded-lg'"
     >
-      <SelectValue class="min-w-0 truncate">
-        <span class="truncate">{{ selectedLabel }}</span>
+      <SelectValue class="min-w-0 flex-1 truncate text-left">
+        <span class="truncate block">{{ selectedLabel }}</span>
       </SelectValue>
       <SelectIcon as-child>
         <IconLucideChevronDown
@@ -68,7 +68,7 @@ const handleChange = (val: string) => {
         :side-offset="4"
         :collision-padding="12"
         :style="{ zIndex }"
-        class="max-h-60 w-[var(--reka-select-trigger-width)] overflow-hidden rounded-xl bg-surface-bright shadow-lg data-[state=open]:animate-select-in data-[state=closed]:animate-select-out"
+        class="max-h-60 min-w-[max(var(--reka-select-trigger-width),160px)] w-auto max-w-[calc(100vw-32px)] overflow-hidden rounded-xl bg-surface-bright shadow-lg border border-outline-variant/15 data-[state=open]:animate-select-in data-[state=closed]:animate-select-out"
       >
         <SelectViewport class="p-1">
           <SelectItem
@@ -77,10 +77,10 @@ const handleChange = (val: string) => {
             :value="String(opt.value)"
             :title="opt.label"
             :style="opt.style"
-            class="relative flex items-center h-8.5 px-3 pr-8 text-sm rounded-md cursor-pointer outline-none focus-visible:outline-none transition-[background-color,color] duration-200 data-[highlighted]:bg-on-surface/8"
-            :class="opt.value === modelValue ? 'text-primary' : 'text-on-surface'"
+            class="relative flex items-center h-8.5 px-3 pr-8 text-sm rounded-md cursor-pointer outline-none focus-visible:outline-none transition-[background-color,color] duration-200 data-[highlighted]:bg-on-surface/8 whitespace-nowrap"
+            :class="opt.value === modelValue ? 'text-primary font-medium' : 'text-on-surface'"
           >
-            <SelectItemText class="truncate">{{ opt.label }}</SelectItemText>
+            <SelectItemText class="whitespace-nowrap">{{ opt.label }}</SelectItemText>
             <SelectItemIndicator class="absolute right-2">
               <IconLucideCheck class="size-3.5 text-primary" />
             </SelectItemIndicator>

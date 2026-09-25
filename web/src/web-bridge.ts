@@ -47,6 +47,14 @@ import { webPluginManager } from "./services/plugins/webPluginManager";
 import { convertCjkText, convertCjkBatch } from "./utils/cjkConverter";
 import { PITCH_SHIFTER_WORKLET_SOURCE } from "./services/pitchShifter.worklet";
 import localforage from "localforage";
+import type {
+  CloudUploadProgress,
+  CloudUploadResult,
+  CloudUploadStage,
+  PickedSong,
+} from "@shared/types/cloudUpload";
+import { computeFileMd5 } from "./utils/md5";
+import { getAudioFileMeta } from "./utils/audioTag";
 
 const statsDb = localforage.createInstance({ name: "splayer", storeName: "local_stats" });
 const STATS_PLAY_EVENTS_KEY = "play_events";
@@ -1244,6 +1252,144 @@ function resolveCodecFromTrack(tr: Track): string {
   return "MP3";
 }
 
+// ─── 3.5 网易云 NOS 音频直传与云盘接口辅助 ───
+
+/** 私有云盘音频 bucket */
+const CLOUD_BUCKET = "jd-musicrep-privatecloud-audio-public";
+
+/** 扩展名 → Content-Type */
+const CLOUD_MIME_BY_EXT: Record<string, string> = {
+  mp3: "audio/mpeg",
+  flac: "audio/flac",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  wma: "audio/x-ms-wma",
+  ape: "audio/x-ape",
+  aiff: "audio/aiff",
+};
+
+/**
+ * 封装 XHR 二进制直传以获得精准的 upload.onprogress 进度回报
+ */
+function uploadViaXhr(
+  url: string,
+  file: File,
+  token: string,
+  md5: string,
+  mime: string,
+  onBytes: (loaded: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    xhr.setRequestHeader("x-nos-token", token);
+    xhr.setRequestHeader("Content-MD5", md5);
+    xhr.setRequestHeader("Content-Type", mime);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        onBytes(e.loaded);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`NOS 上传响应异常 (${xhr.status}): ${xhr.responseText || xhr.statusText}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("网络连接失败，直传 NOS 异常"));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new Error("NOS 上传超时"));
+    };
+
+    xhr.timeout = 10 * 60 * 1000; // 10 分钟超时
+    xhr.send(file);
+  });
+}
+
+/**
+ * 将音频文件二进制上传至网易云 NOS
+ * 优先采用浏览器直接向官方 Web 上传网关（wannos-web.127.net / wanproxy-web.127.net）直传，
+ * 若因网络环境阻断，则降级为服务端代理转发（/api/proxy/nos-upload）
+ */
+async function uploadToNos(
+  objectPath: string,
+  file: File,
+  token: string,
+  md5: string,
+  mime: string,
+  onBytes: (loaded: number) => void,
+): Promise<void> {
+  const directHosts = [
+    "https://wannos-web.127.net",
+    "https://wanproxy-web.127.net",
+  ];
+
+  let lastError: Error | null = null;
+
+  // 1. 尝试浏览器直传
+  for (const host of directHosts) {
+    const uploadUrl = `${host}/${CLOUD_BUCKET}/${objectPath}?offset=0&complete=true&version=1.0`;
+    try {
+      await uploadViaXhr(uploadUrl, file, token, md5, mime, onBytes);
+      return;
+    } catch (err: any) {
+      console.warn(`[web-bridge] 直传 NOS (${host}) 失败:`, err);
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  // 2. 直传失败，尝试服务端代理转发兜底
+  try {
+    const proxyTarget = `https://wannos-web.127.net/${CLOUD_BUCKET}/${objectPath}?offset=0&complete=true&version=1.0`;
+    const fallbackUrl = `/api/proxy/nos-upload?url=${encodeURIComponent(proxyTarget)}`;
+    await uploadViaXhr(fallbackUrl, file, token, md5, mime, onBytes);
+  } catch (err: any) {
+    console.error("[web-bridge] 服务端 NOS 代理上传兜底亦失败:", err);
+    throw lastError || (err instanceof Error ? err : new Error(String(err)));
+  }
+}
+
+/**
+ * 快捷调用网易云底层 API
+ */
+async function callNeteaseBridge<T = any>(
+  name: string,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  const cookies = getClientSessions();
+  const config = getStoredConfig();
+  const res = await fetch("/api/apis/call", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-splayer-cookies": encodeURIComponent(JSON.stringify(cookies)),
+      "x-splayer-config": encodeURIComponent(JSON.stringify(config)),
+    },
+    body: JSON.stringify({ platform: "netease", name, params, cookies, config }),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  if (data.cookiePatch) {
+    updateClientSessionCookies(data.cookiePatch);
+  }
+  if (!data.ok) {
+    throw new Error(data.error || `网易云接口 ${name} 调用异常`);
+  }
+  return data.body as T;
+}
+
 // ─── 4. 构建 window.api 完整门面 ───
 
 const webApi = {
@@ -1879,11 +2025,11 @@ const webApi = {
   },
 
   cloud: {
-    pickSongs: async () => {
-      return new Promise<Array<{ path: string; name: string; size: number }>>((resolve) => {
+    pickSongs: async (): Promise<PickedSong[]> => {
+      return new Promise<PickedSong[]>((resolve) => {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = "audio/*";
+        input.accept = "audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus,.wma,.ape,.aiff";
         input.multiple = true;
         input.style.display = "none";
         document.body.appendChild(input);
@@ -1910,7 +2056,7 @@ const webApi = {
           resolved = true;
           cleanup();
           const files = Array.from(input.files || []);
-          const picked = files.map((file) => {
+          const picked: PickedSong[] = files.map((file) => {
             const id = `web_file_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
             webFileCache.set(id, file);
             return {
@@ -1925,54 +2071,145 @@ const webApi = {
         input.click();
       });
     },
-    uploadSong: async (filePath: string, uploadId: string) => {
+    uploadSong: async (filePath: string, uploadId: string): Promise<CloudUploadResult> => {
       const file = webFileCache.get(filePath);
-      const fileName = file ? file.name.replace(/\.[^/.]+$/, "") : filePath || "未知音频";
-      const fileSize = file ? file.size : 15 * 1024 * 1024;
+      if (!file) {
+        throw new Error("未找到待上传的本地音频文件，请重新选择");
+      }
 
-      cloudProgressListeners.forEach((cb) =>
-        cb({ uploadId, stage: "reading", loaded: 0, total: fileSize })
-      );
-      await new Promise((r) => setTimeout(r, 250));
+      const fileSize = file.size;
+      const fullName = file.name;
+      const ext = fullName.split(".").pop()?.toLowerCase() || "mp3";
+      const baseName = fullName.replace(/\.[^.]+$/, "");
+      const mime = CLOUD_MIME_BY_EXT[ext] ?? "audio/mpeg";
 
-      cloudProgressListeners.forEach((cb) =>
-        cb({ uploadId, stage: "uploading", loaded: Math.floor(fileSize * 0.45), total: fileSize })
-      );
-      await new Promise((r) => setTimeout(r, 350));
-
-      cloudProgressListeners.forEach((cb) =>
-        cb({ uploadId, stage: "uploading", loaded: Math.floor(fileSize * 0.9), total: fileSize })
-      );
-      await new Promise((r) => setTimeout(r, 250));
-
-      cloudProgressListeners.forEach((cb) =>
-        cb({ uploadId, stage: "finishing", loaded: fileSize, total: fileSize })
-      );
-      await new Promise((r) => setTimeout(r, 150));
-
-      const newTrackId = `cloud_up_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      const audioBlobUrl = file ? URL.createObjectURL(file) : getDemoAudioUrl();
-      const newTrack: Track = {
-        id: newTrackId,
-        source: "netease",
-        title: fileName,
-        artists: [{ id: "6452", name: "未知歌手" }],
-        album: { id: "album_cloud", name: "我的音乐云盘", cover: "/images/album.jpg" },
-        duration: 210000,
-        cover: "/images/album.jpg",
-        coverOriginal: "/images/album.jpg",
-        cloud: true,
-        path: audioBlobUrl,
+      const emitProgress = (stage: CloudUploadStage, loaded: number, total: number) => {
+        cloudProgressListeners.forEach((cb) => {
+          try {
+            cb({ uploadId, stage, loaded, total });
+          } catch {}
+        });
       };
 
-      cloudStoreTracks.unshift(newTrack);
-      cloudStoreSize += fileSize;
+      // 阶段 1: 校验与分块计算 MD5 哈希
+      emitProgress("checking", 0, fileSize);
+      const md5 = await computeFileMd5(file, (loaded, total) => {
+        emitProgress("checking", loaded, total);
+      });
 
-      return { success: true, songId: newTrackId };
+      // 提取歌曲元数据（优先读取 ID3v2 标签，降级为文件名解析）
+      const meta = await getAudioFileMeta(file, fullName);
+      const title = meta.title || baseName;
+      const artist = meta.artist || "未知艺术家";
+      const album = meta.album || "未知专辑";
+
+      // 阶段 2: 查重（秒传判定）
+      const checkRes = await callNeteaseBridge<any>("cloud_upload_check", {
+        md5,
+        length: fileSize,
+      });
+
+      if (checkRes?.code === 301 || checkRes?.code === -460 || checkRes?.code === 401) {
+        throw new Error("请先登录网易云音乐账号后再使用云盘功能");
+      }
+      if (checkRes?.code && checkRes.code !== 200 && checkRes.code !== 0) {
+        throw new Error(checkRes.message || checkRes.msg || `云盘查重失败 (code: ${checkRes.code})`);
+      }
+
+      const needUpload = Boolean(checkRes?.needUpload);
+      const checkSongId = checkRes?.songId;
+      console.log(`[cloud-upload] 查重完成: ${fullName} needUpload=${needUpload} checkSongId=${checkSongId}`);
+
+      // 秒传分支：文件已在网易云曲库，调用导入接口直接落库
+      if (!needUpload) {
+        emitProgress("finishing", fileSize, fileSize);
+        const checkV2 = await callNeteaseBridge<any>("cloud_upload_check_v2", {
+          md5,
+          fileSize,
+        });
+
+        const matched = checkV2?.data?.[0];
+        console.log(`[cloud-upload] 秒传查重: ${fullName} upload=${matched?.upload} songId=${matched?.songId}`);
+        if (!matched?.songId) {
+          throw new Error("秒传查重未能匹配曲库歌曲");
+        }
+
+        // matched.upload: 0 可导入 / 1 已在云盘 / 2 不可导入
+        if (matched.upload !== 1) {
+          const importRes = await callNeteaseBridge<any>("cloud_song_import", {
+            songId: matched.songId,
+            song: title,
+            artist,
+            album,
+            fileType: ext,
+          });
+          console.log(`[cloud-upload] 秒传导入完成: ${fullName} code=${importRes?.code}`);
+        }
+
+        webFileCache.delete(filePath);
+        return {
+          success: true,
+          instant: true,
+          songId: String(matched.songId),
+        };
+      }
+
+      // 真实上传分支：申请 token -> 客户端直传 NOS -> 提交信息 -> 发布
+      const tokenRes = await callNeteaseBridge<any>("cloud_nos_token", {
+        ext,
+        filename: baseName.replace(/\s/g, "").replace(/\./g, "_"),
+        md5,
+      });
+
+      const result = tokenRes?.result;
+      if (!result?.objectKey || !result?.token) {
+        throw new Error(tokenRes?.message || "获取网易云上传凭证失败");
+      }
+      const { token, objectKey, resourceId } = result;
+
+      emitProgress("uploading", 0, fileSize);
+      const objectPath = String(objectKey).replace(/\//g, "%2F");
+
+      await uploadToNos(
+        objectPath,
+        file,
+        token,
+        md5,
+        mime,
+        (loaded) => emitProgress("uploading", loaded, fileSize),
+      );
+
+      // 上传完毕，提交元数据并发布到云盘
+      emitProgress("finishing", fileSize, fileSize);
+
+      const infoRes = await callNeteaseBridge<any>("cloud_upload_info", {
+        md5,
+        songid: checkSongId,
+        filename: fullName,
+        song: title,
+        album,
+        artist,
+        resourceId,
+      });
+
+      const songId = infoRes?.songId;
+      if (songId == null) {
+        throw new Error(infoRes?.message || "提交云盘音频元数据失败");
+      }
+
+      await callNeteaseBridge("cloud_pub", { songid: songId });
+      console.log(`[cloud-upload] 真实直传发布成功: ${fullName} songId=${songId}`);
+      webFileCache.delete(filePath);
+
+      return {
+        success: true,
+        instant: false,
+        songId: String(songId),
+      };
     },
     upload: async () => {},
     getProgress: async () => null,
-    onUploadProgress: (callback: (progress: any) => void) => {
+    onUploadProgress: (callback: (progress: CloudUploadProgress) => void) => {
       cloudProgressListeners.add(callback);
       return () => {
         cloudProgressListeners.delete(callback);

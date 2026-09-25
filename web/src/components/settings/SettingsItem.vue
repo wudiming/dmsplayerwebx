@@ -85,7 +85,7 @@ const descriptionText = computed(() =>
         </div>
       </div>
 
-      <div class="shrink-0 flex items-center justify-end max-w-[55%]">
+      <div class="shrink-0 flex items-center justify-end max-w-[62%] sm:max-w-[50%]">
         <SSwitch
           v-if="item.type === 'switch'"
           :model-value="model"
@@ -97,7 +97,7 @@ const descriptionText = computed(() =>
           :model-value="model"
           :options="selectOptions"
           :disabled="isDisabled"
-          class="w-32 sm:w-44 max-w-full"
+          class="min-w-[136px] sm:w-48 max-w-full"
           @update:model-value="applyChange($event)"
         />
         <SSlider

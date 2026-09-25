@@ -58,10 +58,14 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   <!-- 移动端模式 -->
   <div
     v-if="isMobile"
-    class="relative h-full flex items-center px-3 gap-2 overflow-hidden select-none"
+    class="relative h-full flex items-center gap-2 overflow-hidden select-none transition-all duration-300"
+    :class="isFloating ? 'rounded-full px-2.5 bg-surface-panel/40' : 'px-3'"
   >
     <!-- 顶部极细进度条 -->
-    <div class="absolute left-0 right-0 top-0 h-[2px] bg-on-surface/10 overflow-hidden">
+    <div
+      class="absolute left-0 right-0 top-0 overflow-hidden"
+      :class="isFloating ? 'h-[2px] rounded-full mx-4 mt-0.5 bg-on-surface/10' : 'h-[2px] bg-on-surface/10'"
+    >
       <div
         class="h-full bg-primary transition-[width] duration-200"
         :style="{ width: duration > 0 ? `${(position / duration) * 100}%` : '0%' }"
@@ -72,7 +76,10 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       class="flex items-center gap-2.5 flex-1 min-w-0 py-1 cursor-pointer active:opacity-80 transition-opacity"
       @click="status.isPlayerExpanded = true"
     >
-      <div class="size-11 shrink-0 rounded-lg overflow-hidden shadow-sm bg-on-surface/5">
+      <div
+        class="shrink-0 overflow-hidden shadow-sm bg-on-surface/5 transition-all duration-300"
+        :class="isFloating ? 'size-10 rounded-full border border-primary/20 ring-1 ring-primary/10' : 'size-11 rounded-lg'"
+      >
         <SImg :src="media.track?.cover" class="size-full object-cover" />
       </div>
       <div class="flex-1 min-w-0 flex flex-col justify-center">
