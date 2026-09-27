@@ -54,6 +54,21 @@ const formatPlayCount = (count?: number): string => {
         <IconLucidePlay class="size-2.5 fill-white" />
         <span>{{ formatPlayCount(item.playCount) }}</span>
       </div>
+      <!-- 歌单歌曲数与收听量徽标（鼠标悬停划出，位于播放键左侧） -->
+      <div
+        v-if="type === 'default' && (item.trackCount || item.playCount)"
+        class="absolute left-2 bottom-2 max-w-[calc(100%-3.25rem)] flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-300 shadow-md select-none pointer-events-none"
+      >
+        <span v-if="item.trackCount" class="flex items-center gap-1 shrink-0">
+          <IconLucideListMusic class="size-3 text-white/80" />
+          <span>{{ item.trackCount }}首</span>
+        </span>
+        <span v-if="item.trackCount && item.playCount" class="w-0.5 h-2 bg-white/30 rounded-full shrink-0" />
+        <span v-if="item.playCount" class="flex items-center gap-1 shrink-0">
+          <IconLucideHeadphones class="size-3 text-white/80" />
+          <span>{{ formatPlayCount(item.playCount) }}</span>
+        </span>
+      </div>
       <!-- 播放按钮 -->
       <div
         class="absolute size-9 flex items-center justify-center rounded-full opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100 shadow-md"

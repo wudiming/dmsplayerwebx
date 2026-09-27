@@ -71,7 +71,15 @@ export const useDownload = () => {
   const prepareRequest = (track: Track, opts: EnqueueOptions): DownloadRequest | null => {
     if (track.source === "local") return null;
     const download = useSettingsStore().system.download;
-    const level = opts.quality ?? download.quality;
+    let storedQuality: QualityLevel | undefined;
+    try {
+      const raw = localStorage.getItem("splayer_web_config");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.download?.quality) storedQuality = parsed.download.quality;
+      }
+    } catch {}
+    const level = opts.quality ?? download?.quality ?? storedQuality ?? "lossless";
     const tagOptions: DownloadTagOptions = {
       embedCover: download.embedCover,
       embedMeta: download.embedMeta,

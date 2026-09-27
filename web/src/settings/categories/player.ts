@@ -136,6 +136,17 @@ const playerCategory: SettingCategory = {
               marks: { 1: "1", 4: "4", 8: "8", 12: "12" },
             },
             {
+              key: "spectrumColorMode",
+              type: "select",
+              binding: { store: "settings", path: "player.spectrumColorMode" },
+              options: [
+                { value: "pastel", labelKey: "settings.spectrumColorMode.pastel" },
+                { value: "aurora", labelKey: "settings.spectrumColorMode.aurora" },
+                { value: "monochrome", labelKey: "settings.spectrumColorMode.monochrome" },
+              ],
+              defaultValue: "pastel",
+            },
+            {
               key: "reverseSpectrum",
               type: "switch",
               binding: { store: "settings", path: "player.reverseSpectrum" },

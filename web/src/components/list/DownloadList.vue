@@ -208,15 +208,15 @@ defineExpose({ playAll });
                 :class="isPlaying(item) ? 'text-primary/70' : 'text-on-surface-variant'"
               >
                 <span
-                  v-if="item.track.quality"
+                  v-if="item.qualityLevel || item.track.quality"
                   class="shrink-0 px-1 rounded text-[10px] leading-[18px] font-bold border border-solid"
                   :class="
-                    isLosslessQuality(item.track.quality)
+                    isLosslessQuality(item.qualityLevel || item.track.quality)
                       ? 'text-amber-500 border-amber-500/40'
                       : 'text-on-surface-variant border-on-surface-variant/40'
                   "
                 >
-                  {{ getQualityLabel(item.track.quality) }}
+                  {{ getQualityLabel(item.qualityLevel || item.track.quality) }}
                 </span>
                 <span class="truncate">{{ artistText(item) }}</span>
               </div>

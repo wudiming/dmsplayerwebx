@@ -13,11 +13,23 @@
 import { createOption } from "../core/option";
 import type { NeteaseModule } from "../core/types";
 
+const LEVEL_TO_BR: Record<string, number> = {
+  standard: 128000,
+  higher: 192000,
+  exhigh: 320000,
+  lossless: 999000,
+  hires: 999000,
+};
+
 const song_download_url: NeteaseModule = (query, request) => {
-  const data = {
+  const level = String(query.level ?? "exhigh");
+  const data: Record<string, unknown> = {
     id: query.id,
-    level: query.level ?? "exhigh",
+    level,
   };
+  if (LEVEL_TO_BR[level]) {
+    data.br = LEVEL_TO_BR[level];
+  }
   return request("/api/song/enhance/download/url/v1", data, createOption(query));
 };
 

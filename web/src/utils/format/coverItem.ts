@@ -34,6 +34,7 @@ export const playlistToCoverItem = (playlist: Playlist): CoverItem => ({
   title: playlist.name,
   cover: playlist.cover,
   trackCount: playlist.trackCount ?? 0,
+  playCount: playlist.playCount,
 });
 
 /**

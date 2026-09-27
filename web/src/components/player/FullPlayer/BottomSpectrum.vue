@@ -173,23 +173,44 @@ const draw = (): void => {
 
   ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-  if (props.inPlayerBar) {
-    // 底栏半透明氛围模式：创建垂直渐变遮罩，底部保持柔和主色，向上渐隐消散，确保前景文字完全清晰可读
-    const grad = ctx.createLinearGradient(0, cssHeight, 0, 0);
-    grad.addColorStop(0, getThemeCoverRgba(0.85));
-    grad.addColorStop(0.3, getThemeCoverRgba(0.45));
-    grad.addColorStop(0.65, getThemeCoverRgba(0.12));
-    grad.addColorStop(1, getThemeCoverRgba(0.0));
-    ctx.fillStyle = grad;
-  } else if (props.color) {
+  const mode = settings.player.spectrumColorMode || "pastel";
+
+  if (props.color) {
     ctx.fillStyle = props.color;
+  } else if (mode === "monochrome") {
+    if (props.inPlayerBar) {
+      const grad = ctx.createLinearGradient(0, cssHeight, 0, 0);
+      grad.addColorStop(0, getThemeCoverRgba(0.85));
+      grad.addColorStop(0.3, getThemeCoverRgba(0.45));
+      grad.addColorStop(0.65, getThemeCoverRgba(0.12));
+      grad.addColorStop(1, getThemeCoverRgba(0.0));
+      ctx.fillStyle = grad;
+    } else {
+      const compColor = getComputedStyle(canvas).color;
+      ctx.fillStyle =
+        compColor && compColor !== "rgba(0, 0, 0, 0)" && compColor !== "transparent"
+          ? compColor
+          : getThemeCoverRgba(1);
+    }
   } else {
-    // 全屏模式：若容器有 text-cover 则跟随，否则使用封面主色
-    const compColor = getComputedStyle(canvas).color;
-    ctx.fillStyle =
-      compColor && compColor !== "rgba(0, 0, 0, 0)" && compColor !== "transparent"
-        ? compColor
-        : getThemeCoverRgba(1);
+    // 清新炫彩 / 极光渐变（低饱和度清新马卡龙）
+    const hGrad = ctx.createLinearGradient(0, 0, cssWidth, 0);
+    const alpha = props.inPlayerBar ? 0.78 : 0.9;
+    if (mode === "aurora") {
+      // 极光青蓝渐变
+      hGrad.addColorStop(0, `rgba(150, 222, 218, ${alpha})`);
+      hGrad.addColorStop(0.35, `rgba(132, 209, 214, ${alpha})`);
+      hGrad.addColorStop(0.7, `rgba(144, 185, 225, ${alpha})`);
+      hGrad.addColorStop(1, `rgba(182, 172, 226, ${alpha})`);
+    } else {
+      // pastel：清新低饱和马卡龙彩虹（柔粉 -> 暖杏 -> 薄荷绿 -> 冰晶蓝 -> 薰衣草紫）
+      hGrad.addColorStop(0, `rgba(248, 180, 192, ${alpha})`);
+      hGrad.addColorStop(0.22, `rgba(253, 211, 160, ${alpha})`);
+      hGrad.addColorStop(0.48, `rgba(168, 230, 207, ${alpha})`);
+      hGrad.addColorStop(0.75, `rgba(163, 216, 244, ${alpha})`);
+      hGrad.addColorStop(1, `rgba(205, 180, 219, ${alpha})`);
+    }
+    ctx.fillStyle = hGrad;
   }
 
   for (let i = 0; i < numBars; i++) {
@@ -209,6 +230,20 @@ const draw = (): void => {
     ctx.beginPath();
     ctx.roundRect(x, y, barWidth, barHeight, props.radius);
     ctx.fill();
+  }
+
+  // 底栏半透明氛围模式下叠加垂直羽化消散，确保前景文字完美清晰
+  if (props.inPlayerBar && mode !== "monochrome") {
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-in";
+    const fadeGrad = ctx.createLinearGradient(0, cssHeight, 0, 0);
+    fadeGrad.addColorStop(0, "rgba(0, 0, 0, 0.9)");
+    fadeGrad.addColorStop(0.35, "rgba(0, 0, 0, 0.45)");
+    fadeGrad.addColorStop(0.7, "rgba(0, 0, 0, 0.12)");
+    fadeGrad.addColorStop(1, "rgba(0, 0, 0, 0.0)");
+    ctx.fillStyle = fadeGrad;
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+    ctx.restore();
   }
 };
 

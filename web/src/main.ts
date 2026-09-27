@@ -112,6 +112,14 @@ const bootstrapPlayback = async (): Promise<void> => {
   } else {
     await restoreLastTrack();
   }
+
+  // 初始化网易云多端实时播放列表同步与恢复服务
+  try {
+    const { initQueueSync } = await import("./services/sync/queueSyncService");
+    initQueueSync();
+  } catch (err) {
+    console.warn("[QueueSync] init error:", err);
+  }
 };
 
 // 初始化程序

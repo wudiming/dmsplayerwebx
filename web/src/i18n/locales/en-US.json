@@ -938,6 +938,13 @@
       "label": "Bar Width",
       "description": "Smaller values give thinner, denser bars"
     },
+    "spectrumColorMode": {
+      "label": "Spectrum Color Mode",
+      "description": "Customize visual color scheme and gradient for the dynamic spectrum",
+      "pastel": "Pastel Rainbow (Low Saturation)",
+      "aurora": "Aurora Gradient",
+      "monochrome": "Monochrome (Follow Cover)"
+    },
     "reverseSpectrum": {
       "label": "Reverse Spectrum",
       "description": "When enabled, the frequency of the bars decreases from the center toward the sides; otherwise it increases."

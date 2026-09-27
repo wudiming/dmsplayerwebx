@@ -18,10 +18,15 @@ import type { NeteaseModule } from "../core/types";
 const song_url: NeteaseModule = (query, request) => {
   const ids = query.id ?? query.ids;
   const level = String(query.level ?? "exhigh");
+  const isLossless =
+    level === "lossless" ||
+    level === "hires" ||
+    level === "jymaster" ||
+    level === "jyeffect";
   const data: Record<string, unknown> = {
     ids: `[${String(ids).split(",").join(",")}]`,
     level,
-    encodeType: "flac",
+    encodeType: isLossless ? "flac" : "mp3",
   };
   if (level === "sky") {
     data.immerseType = query.immerseType ?? "c51";

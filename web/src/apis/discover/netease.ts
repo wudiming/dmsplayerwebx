@@ -108,6 +108,7 @@ export const fetchTopPlaylists = async (params: {
       cover: withPicSize(pl.coverImgUrl || pl.picUrl),
       subtitle: pl.copywriter || (pl.creator?.nickname ? `by ${pl.creator.nickname}` : undefined),
       trackCount: pl.trackCount || 0,
+      playCount: pl.playCount ?? pl.playcount,
     }));
     return {
       items,

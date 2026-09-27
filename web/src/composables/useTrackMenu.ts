@@ -197,9 +197,9 @@ export const useTrackMenu = (
   const handleSelect = async (key: string): Promise<void> => {
     const current = track.value;
     if (!current) return;
-    // 下载子菜单：download:<音质>，空音质表示默认
-    if (key.startsWith("download:")) {
-      const quality = key.slice("download:".length);
+    // 下载菜单项：download 或 download:<音质>，空音质表示默认
+    if (key === "download" || key.startsWith("download:")) {
+      const quality = key === "download" ? "" : key.slice("download:".length);
       options.onDownload?.(current, quality ? (quality as QualityLevel) : undefined);
       return;
     }

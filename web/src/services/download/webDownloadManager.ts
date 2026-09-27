@@ -99,6 +99,10 @@ class WebDownloadManager {
     return [...this.tasks];
   }
 
+  private maxConcurrent = 3;
+  private runningCount = 0;
+  private pendingRequests: Map<string, DownloadRequest> = new Map();
+
   public async start(req: DownloadRequest): Promise<{ ok: boolean; reason?: "downloaded" | "queued" }> {
     const existing = this.tasks.find((t) => t.taskId === req.taskId);
     if (existing && (existing.status === "downloading" || existing.status === "queued")) {
@@ -121,12 +125,36 @@ class WebDownloadManager {
     } else {
       this.tasks.unshift(task);
     }
+    this.pendingRequests.set(req.taskId, req);
     this.emitState(task);
 
-    // 异步执行下载全流程
-    void this.processTask(task, req);
+    // 触发并发控制调度器
+    this.scheduleNext();
 
     return { ok: true };
+  }
+
+  private scheduleNext(): void {
+    while (this.runningCount < this.maxConcurrent) {
+      // 队列按加入顺序（先入队的优先）取下一个处于 queued 状态的任务
+      const nextTask = [...this.tasks].reverse().find((t) => t.status === "queued");
+      if (!nextTask) break;
+
+      const req = this.pendingRequests.get(nextTask.taskId);
+      if (!req) {
+        nextTask.status = "failed";
+        nextTask.errorCode = "MISSING_REQUEST";
+        this.emitState(nextTask);
+        continue;
+      }
+
+      this.runningCount++;
+      void this.processTask(nextTask, req).finally(() => {
+        this.runningCount--;
+        this.pendingRequests.delete(nextTask.taskId);
+        this.scheduleNext();
+      });
+    }
   }
 
   private async processTask(task: DownloadTask, req: DownloadRequest) {
@@ -444,7 +472,9 @@ class WebDownloadManager {
     if (task && (task.status === "queued" || task.status === "downloading")) {
       task.status = "canceled";
       task.finishedAt = Date.now();
+      this.pendingRequests.delete(taskId);
       this.emitState(task);
+      this.scheduleNext();
     }
   }
 
@@ -453,8 +483,10 @@ class WebDownloadManager {
   }
 
   public async remove(taskId: string): Promise<void> {
+    this.pendingRequests.delete(taskId);
     this.tasks = this.tasks.filter((t) => t.taskId !== taskId);
     this.saveToStorage();
+    this.scheduleNext();
   }
 
   public async clearFinished(): Promise<void> {

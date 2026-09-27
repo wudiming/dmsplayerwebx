@@ -254,6 +254,8 @@ export interface PlayerSettings {
   spectrumBarWidth: number;
   /** 是否反转频谱方向（启用后低频位于频谱两端） */
   reverseSpectrum: boolean;
+  /** 频谱配色模式：monochrome 单色跟随 / pastel 清新炫彩 / aurora 极光淡彩 */
+  spectrumColorMode: "monochrome" | "pastel" | "aurora";
   /** 在线歌曲音质偏好；实际可用级别取决于账号权限 */
   songLevel: QualityLevel;
   /** 允许完整音源不可用时播放试听片段 */

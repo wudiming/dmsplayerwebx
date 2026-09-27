@@ -926,6 +926,13 @@
       "label": "频谱条宽度",
       "description": "数值越小柱条越细越密"
     },
+    "spectrumColorMode": {
+      "label": "频谱色彩模式",
+      "description": "自定义动态频谱的视觉配色与渐变方案",
+      "pastel": "清新炫彩 (低饱和度)",
+      "aurora": "极光青蓝 (柔和渐变)",
+      "monochrome": "经典单色 (跟随封面)"
+    },
     "reverseSpectrum": {
       "label": "频谱反向",
       "description": "启用后频率从中间向两侧递减，否则递增"

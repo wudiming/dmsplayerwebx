@@ -58,6 +58,7 @@ export interface Playlist {
   cover?: string;
   description?: string;
   trackCount?: number;
+  playCount?: number;
   /** 创建者 */
   owner?: string;
 }
