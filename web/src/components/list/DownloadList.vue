@@ -27,13 +27,10 @@ const props = withDefaults(
   defineProps<{
     /** 当前 tab 已过滤好的下载任务 */
     tasks: DownloadTask[];
-    /** 是否开启批量管理模式 */
-    batchMode?: boolean;
     /** 已选任务 taskId 集合 */
     selectedTaskIds?: Set<string>;
   }>(),
   {
-    batchMode: false,
     selectedTaskIds: () => new Set(),
   },
 );
@@ -60,6 +57,7 @@ const isIndeterminate = computed(
 const STATUS_KEY: Record<DownloadStatus, string> = {
   queued: "download.status.queued",
   downloading: "download.status.downloading",
+  paused: "download.status.paused",
   done: "download.status.done",
   failed: "download.status.failed",
   canceled: "download.status.canceled",
@@ -164,18 +162,16 @@ defineExpose({ playAll });
         <div class="flex items-center gap-3 pl-3 pr-6 mx-3 h-10 text-sm text-on-surface-variant/60">
           <div class="w-8 shrink-0 flex items-center justify-center">
             <SCheckbox
-              v-if="batchMode"
               :checked="isAllSelected"
               :indeterminate="isIndeterminate"
               @update:checked="emit('toggleSelectAll', $event)"
             />
-            <span v-else>#</span>
           </div>
           <div class="flex-1 min-w-0 px-1.5">{{ t("songList.title") }}</div>
           <div class="w-32 shrink-0">{{ t("download.colStatus") }}</div>
           <div class="w-20 shrink-0 text-center">{{ t("download.colSize") }}</div>
           <div class="w-16 shrink-0 text-center">{{ t("songList.duration") }}</div>
-          <div class="w-20 shrink-0 text-center">{{ t("songList.actions") }}</div>
+          <div class="w-24 shrink-0 text-center">{{ t("songList.actions") }}</div>
         </div>
       </div>
     </template>
@@ -186,48 +182,62 @@ defineExpose({ playAll });
           class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl border-2 border-solid transition-[background-color,border-color] duration-200"
           :class="[
             rowClass(item),
-            batchMode && selectedTaskIds.has(item.taskId) ? '!bg-primary/20 !border-primary/50' : '',
+            selectedTaskIds.has(item.taskId) ? '!bg-primary/20 !border-primary/50' : '',
           ]"
-          @click="batchMode ? emit('toggleSelect', item.taskId) : undefined"
-          @dblclick="!batchMode && isDone(item) ? playTask(item) : undefined"
+          @click="selectedCount > 0 ? emit('toggleSelect', item.taskId) : undefined"
+          @dblclick="selectedCount === 0 && isDone(item) ? playTask(item) : undefined"
         >
           <!-- 序号 / 多选框 / 状态图标 -->
           <div
-            class="w-8 shrink-0 flex items-center justify-center relative"
+            class="w-8 shrink-0 flex items-center justify-center relative cursor-pointer"
             :class="isPlaying(item) ? 'text-primary' : 'text-on-surface-variant'"
-            @click.stop="batchMode ? emit('toggleSelect', item.taskId) : onIndexClick(item)"
+            @click.stop="emit('toggleSelect', item.taskId)"
           >
+            <!-- 勾选框：已有选中项、当前被选或鼠标悬停在序号区时展现 -->
             <SCheckbox
-              v-if="batchMode"
               :checked="selectedTaskIds.has(item.taskId)"
+              class="transition-opacity duration-150 z-1"
+              :class="
+                selectedTaskIds.has(item.taskId) || selectedCount > 0
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100'
+              "
               @update:checked="emit('toggleSelect', item.taskId)"
               @click.stop
             />
-            <template v-else-if="isDone(item)">
-              <span
-                v-if="!isPlaying(item)"
-                class="text-sm font-bold tabular-nums group-hover:opacity-0 transition-opacity duration-300"
-              >
-                {{ index + 1 }}
-              </span>
-              <IconLucideMusic
-                v-else
-                class="size-5 group-hover:opacity-0 transition-opacity duration-300"
-              />
-              <div
-                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-[opacity,transform] duration-300 group-hover:scale-100 scale-80 cursor-pointer"
-              >
-                <IconLucidePause v-if="isPlaying(item) && status.isPlaying" class="size-5" />
-                <IconLucidePlay v-else class="size-5" />
-              </div>
-            </template>
-            <template v-else>
-              <IconLucideLoaderCircle
-                v-if="item.status === 'downloading'"
-                class="size-4 animate-spin"
-              />
-              <IconLucideDownload v-else class="size-4" />
-            </template>
+            <!-- 默认序号与状态图标：在悬停或有选中项时隐藏 -->
+            <div
+              class="absolute inset-0 flex items-center justify-center transition-opacity duration-150 pointer-events-none"
+              :class="
+                selectedTaskIds.has(item.taskId) || selectedCount > 0
+                  ? 'opacity-0'
+                  : 'opacity-100 group-hover:opacity-0'
+              "
+            >
+              <template v-if="isDone(item)">
+                <span
+                  v-if="!isPlaying(item)"
+                  class="text-sm font-bold tabular-nums"
+                >
+                  {{ index + 1 }}
+                </span>
+                <IconLucideMusic
+                  v-else
+                  class="size-5 text-primary"
+                />
+              </template>
+              <template v-else>
+                <IconLucideLoaderCircle
+                  v-if="item.status === 'downloading'"
+                  class="size-4 animate-spin text-primary"
+                />
+                <IconLucidePause
+                  v-else-if="item.status === 'paused'"
+                  class="size-4 text-amber-500"
+                />
+                <IconLucideDownload v-else class="size-4" />
+              </template>
+            </div>
           </div>
           <!-- 信息 -->
           <div class="flex-1 min-w-0 flex items-center gap-3">
@@ -294,17 +304,50 @@ defineExpose({ playAll });
             {{ item.track.duration ? formatTime(item.track.duration) : "—" }}
           </div>
           <!-- 操作 -->
-          <div class="w-20 shrink-0 flex items-center justify-center gap-1" @click.stop>
-            <SButton
-              v-if="item.status === 'queued' || item.status === 'downloading'"
-              variant="ghost"
-              circle
-              size="small"
-              :title="t('download.cancel')"
-              @click="downloadStore.cancel(item.taskId)"
-            >
-              <template #icon><IconLucideX /></template>
-            </SButton>
+          <div class="w-24 shrink-0 flex items-center justify-center gap-1" @click.stop>
+            <!-- 正在下载/排队中：暂停与取消 -->
+            <template v-if="item.status === 'queued' || item.status === 'downloading'">
+              <SButton
+                variant="ghost"
+                circle
+                size="small"
+                :title="t('download.pause')"
+                @click="downloadStore.pause(item.taskId)"
+              >
+                <template #icon><IconLucidePause class="size-4" /></template>
+              </SButton>
+              <SButton
+                variant="ghost"
+                circle
+                size="small"
+                :title="t('download.cancel')"
+                @click="downloadStore.cancel(item.taskId)"
+              >
+                <template #icon><IconLucideX class="size-4" /></template>
+              </SButton>
+            </template>
+            <!-- 已暂停：继续与取消 -->
+            <template v-else-if="item.status === 'paused'">
+              <SButton
+                variant="ghost"
+                circle
+                size="small"
+                :title="t('download.resume')"
+                @click="downloadStore.resume(item.taskId)"
+              >
+                <template #icon><IconLucidePlay class="size-4" /></template>
+              </SButton>
+              <SButton
+                variant="ghost"
+                circle
+                size="small"
+                :title="t('download.cancel')"
+                @click="downloadStore.cancel(item.taskId)"
+              >
+                <template #icon><IconLucideX class="size-4" /></template>
+              </SButton>
+            </template>
+            <!-- 出错/已取消：重试与删除记录 -->
             <template v-else-if="isError(item.status)">
               <SButton
                 variant="ghost"
@@ -313,7 +356,7 @@ defineExpose({ playAll });
                 :title="t('download.retry')"
                 @click="retry(item)"
               >
-                <template #icon><IconLucideRotateCcw /></template>
+                <template #icon><IconLucideRotateCcw class="size-4" /></template>
               </SButton>
               <SButton
                 variant="ghost"
@@ -322,9 +365,10 @@ defineExpose({ playAll });
                 :title="t('download.remove')"
                 @click="downloadStore.remove(item.taskId)"
               >
-                <template #icon><IconLucideTrash2 /></template>
+                <template #icon><IconLucideTrash2 class="size-4" /></template>
               </SButton>
             </template>
+            <!-- 已完成：打开所在文件夹与删除本地文件 -->
             <template v-else-if="isDone(item)">
               <SButton
                 variant="ghost"
@@ -333,7 +377,7 @@ defineExpose({ playAll });
                 :title="t('download.openFolder')"
                 @click="openFolder(item)"
               >
-                <template #icon><IconLucideFolderOpen /></template>
+                <template #icon><IconLucideFolderOpen class="size-4" /></template>
               </SButton>
               <SButton
                 variant="ghost"
@@ -342,7 +386,7 @@ defineExpose({ playAll });
                 :title="t('download.deleteFile')"
                 @click="confirmDelete(item)"
               >
-                <template #icon><IconLucideTrash2 /></template>
+                <template #icon><IconLucideTrash2 class="size-4" /></template>
               </SButton>
             </template>
           </div>

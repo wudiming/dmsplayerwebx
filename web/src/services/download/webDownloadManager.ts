@@ -454,6 +454,10 @@ class WebDownloadManager {
       task.finishedAt = Date.now();
       this.emitState(task);
     } catch (err: any) {
+      if (task.status === "paused") {
+        this.emitState(task);
+        return;
+      }
       if (ac.signal.aborted || err?.name === "AbortError" || task.status === "canceled") {
         task.status = "canceled";
         task.finishedAt = Date.now();
@@ -479,9 +483,83 @@ class WebDownloadManager {
     return results;
   }
 
-  public async cancel(taskId: string): Promise<void> {
+  public async pause(taskId: string): Promise<void> {
     const task = this.tasks.find((t) => t.taskId === taskId);
     if (task && (task.status === "queued" || task.status === "downloading")) {
+      task.status = "paused";
+      this.abortControllers.get(taskId)?.abort();
+      this.abortControllers.delete(taskId);
+      this.emitState(task);
+      this.scheduleNext();
+    }
+  }
+
+  public async pauseMany(taskIds: string[]): Promise<void> {
+    const idSet = new Set(taskIds);
+    let changed = false;
+    for (const task of this.tasks) {
+      if (idSet.has(task.taskId) && (task.status === "queued" || task.status === "downloading")) {
+        task.status = "paused";
+        this.abortControllers.get(task.taskId)?.abort();
+        this.abortControllers.delete(task.taskId);
+        this.emitState(task);
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleNext();
+  }
+
+  public async pauseAll(): Promise<void> {
+    let changed = false;
+    for (const task of this.tasks) {
+      if (task.status === "queued" || task.status === "downloading") {
+        task.status = "paused";
+        this.abortControllers.get(task.taskId)?.abort();
+        this.abortControllers.delete(task.taskId);
+        this.emitState(task);
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleNext();
+  }
+
+  public async resume(taskId: string): Promise<void> {
+    const task = this.tasks.find((t) => t.taskId === taskId);
+    if (task && task.status === "paused") {
+      task.status = "queued";
+      this.emitState(task);
+      this.scheduleNext();
+    }
+  }
+
+  public async resumeMany(taskIds: string[]): Promise<void> {
+    const idSet = new Set(taskIds);
+    let changed = false;
+    for (const task of this.tasks) {
+      if (idSet.has(task.taskId) && task.status === "paused") {
+        task.status = "queued";
+        this.emitState(task);
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleNext();
+  }
+
+  public async resumeAll(): Promise<void> {
+    let changed = false;
+    for (const task of this.tasks) {
+      if (task.status === "paused") {
+        task.status = "queued";
+        this.emitState(task);
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleNext();
+  }
+
+  public async cancel(taskId: string): Promise<void> {
+    const task = this.tasks.find((t) => t.taskId === taskId);
+    if (task && (task.status === "queued" || task.status === "downloading" || task.status === "paused")) {
       task.status = "canceled";
       task.finishedAt = Date.now();
       this.pendingRequests.delete(taskId);
@@ -496,7 +574,7 @@ class WebDownloadManager {
     const idSet = new Set(taskIds);
     let changed = false;
     for (const task of this.tasks) {
-      if (idSet.has(task.taskId) && (task.status === "queued" || task.status === "downloading")) {
+      if (idSet.has(task.taskId) && (task.status === "queued" || task.status === "downloading" || task.status === "paused")) {
         task.status = "canceled";
         task.finishedAt = Date.now();
         this.pendingRequests.delete(task.taskId);

@@ -2316,6 +2316,12 @@ const webApi = {
   download: {
     start: async (req: any) => webDownloadManager.start(req),
     startMany: async (reqs: any) => webDownloadManager.startMany(reqs),
+    pause: async (taskId: string) => webDownloadManager.pause(taskId),
+    pauseMany: async (taskIds: string[]) => webDownloadManager.pauseMany(taskIds),
+    pauseAll: async () => webDownloadManager.pauseAll(),
+    resume: async (taskId: string) => webDownloadManager.resume(taskId),
+    resumeMany: async (taskIds: string[]) => webDownloadManager.resumeMany(taskIds),
+    resumeAll: async () => webDownloadManager.resumeAll(),
     cancel: async (taskId: string) => webDownloadManager.cancel(taskId),
     cancelMany: async (taskIds: string[]) => webDownloadManager.cancelMany(taskIds),
     retry: async (req: any) => webDownloadManager.retry(req),

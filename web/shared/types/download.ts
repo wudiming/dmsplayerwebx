@@ -14,7 +14,13 @@ export type DownloadFolderScheme = "none" | "artist" | "artist-album";
 
 /** 下载任务状态 */
 export type DownloadStatus =
-  "queued" | "downloading" | "done" | "failed" | "canceled" | "interrupted";
+  | "queued"
+  | "downloading"
+  | "paused"
+  | "done"
+  | "failed"
+  | "canceled"
+  | "interrupted";
 
 /** 写入选项 */
 export interface DownloadTagOptions {
@@ -115,6 +121,12 @@ export interface EnqueueResult {
 export interface DownloadApi {
   start: (req: DownloadRequest) => Promise<EnqueueResult>;
   startMany: (reqs: DownloadRequest[]) => Promise<EnqueueResult[]>;
+  pause: (taskId: string) => Promise<void>;
+  pauseMany: (taskIds: string[]) => Promise<void>;
+  pauseAll: () => Promise<void>;
+  resume: (taskId: string) => Promise<void>;
+  resumeMany: (taskIds: string[]) => Promise<void>;
+  resumeAll: () => Promise<void>;
   cancel: (taskId: string) => Promise<void>;
   cancelMany: (taskIds: string[]) => Promise<void>;
   retry: (req: DownloadRequest) => Promise<EnqueueResult>;

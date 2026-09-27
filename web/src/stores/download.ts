@@ -9,13 +9,18 @@ import type { DownloadTask, DownloadProgress, DownloadStatus } from "@shared/typ
 import { initDownloadResolver } from "@/services/download/resolver";
 
 export const useDownloadStore = defineStore("download", () => {
-  /** 是否尚未结束 */
+  /** 是否尚未结束（排队中、下载中、已暂停） */
   const isActive = (status: DownloadStatus): boolean =>
-    status === "queued" || status === "downloading";
+    status === "queued" || status === "downloading" || status === "paused";
 
-  /** 活跃队列：下载中置顶，其余按实际入队顺序 */
+  /** 活跃队列：下载中置顶，排队中次之，已暂停在后，其余按实际入队顺序 */
   const compareActive = (a: DownloadTask, b: DownloadTask): number => {
-    if (a.status !== b.status) return a.status === "downloading" ? -1 : 1;
+    if (a.status !== b.status) {
+      if (a.status === "downloading") return -1;
+      if (b.status === "downloading") return 1;
+      if (a.status === "queued") return -1;
+      if (b.status === "queued") return 1;
+    }
     return a.createdAt - b.createdAt;
   };
 
@@ -65,6 +70,14 @@ export const useDownloadStore = defineStore("download", () => {
     unsubscribers.push(window.api.download.onProgress(applyProgress));
   };
 
+  const pause = (taskId: string): void => void window.api.download.pause(taskId);
+  const pauseMany = (taskIds: string[]): void => void window.api.download.pauseMany(taskIds);
+  const pauseAll = (): void => void window.api.download.pauseAll();
+
+  const resume = (taskId: string): void => void window.api.download.resume(taskId);
+  const resumeMany = (taskIds: string[]): void => void window.api.download.resumeMany(taskIds);
+  const resumeAll = (): void => void window.api.download.resumeAll();
+
   const cancel = (taskId: string): void => void window.api.download.cancel(taskId);
 
   const cancelMany = (taskIds: string[]): void => {
@@ -94,5 +107,21 @@ export const useDownloadStore = defineStore("download", () => {
     unsubscribers.length = 0;
   });
 
-  return { activeTasks, historyTasks, activeCount, init, cancel, cancelMany, remove, removeMany, clearFinished };
+  return {
+    activeTasks,
+    historyTasks,
+    activeCount,
+    init,
+    pause,
+    pauseMany,
+    pauseAll,
+    resume,
+    resumeMany,
+    resumeAll,
+    cancel,
+    cancelMany,
+    remove,
+    removeMany,
+    clearFinished,
+  };
 });

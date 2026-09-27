@@ -68,10 +68,10 @@ const formatPlayCount = (count?: number): string => {
       >
         <IconLucidePlay class="size-5 text-white fill-white ml-0.5" />
       </div>
-      <!-- 歌单一体化交互条：结合歌曲数、收听量与播放按钮 -->
+      <!-- 歌单一体化交互条：结合歌曲数、收听量与播放按钮（底部居中） -->
       <div
         v-else
-        class="absolute right-2 bottom-2 flex items-center rounded-full bg-black/65 backdrop-blur-md border border-white/15 text-white shadow-lg opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-300 select-none max-w-[calc(100%-1rem)]"
+        class="absolute inset-x-0 bottom-2.5 mx-auto w-fit max-w-[calc(100%-1.25rem)] flex items-center rounded-full bg-black/65 backdrop-blur-md border border-white/15 text-white shadow-lg opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-300 select-none z-10"
         :class="item.trackCount || item.playCount ? 'pl-2.5 pr-1 py-1 gap-2' : 'p-1'"
       >
         <div
