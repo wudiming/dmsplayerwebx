@@ -192,24 +192,7 @@ export const resolveNeteaseEnhancedUrl = async (
 
   const chain = FALLBACK_CHAIN[quality] || FALLBACK_CHAIN.hq;
 
-  // 1. 未登录或非 VIP：直接走解灰，不碰官方接口
-  if (!(await shouldUseOfficial())) {
-    try {
-      const body = await getJson("/song/url/match", { id });
-      if (typeof body.data === "string" && body.data) {
-        pluginLog.info(`[NeteaseEnhanced] ${musicInfo.name || id} -> 解灰成功`);
-        return {
-          ok: true,
-          url: httpsify(body.data),
-          quality: "lossless",
-        };
-      }
-    } catch (e: any) {
-      pluginLog.warn(`[NeteaseEnhanced] 解灰失败: ${e.message}，尝试官方接口`);
-    }
-  }
-
-  // 2. VIP 账号（或解灰失败回退）：走官方接口，按目标音质逐级降级
+  // 1. 优先尝试按目标音质级别请求官方接口（若歌曲免费或账号有权，可精准获取 128k/192k/320k MP3，避免无谓解灰获取 30MB 无损）
   let data: any = null;
   let lastErr = "";
   for (const level of chain) {
@@ -232,16 +215,19 @@ export const resolveNeteaseEnhancedUrl = async (
     }
   }
 
-  // 3. 官方接口也没拿到：解灰兜底
+  // 2. 官方接口无版权或需要 VIP 权限：尝试解灰服务
   if (!data) {
     try {
-      const body = await getJson("/song/url/match", { id });
+      const matchParams: Record<string, any> = { id };
+      if (chain[0]) matchParams.level = chain[0];
+      const body = await getJson("/song/url/match", matchParams);
       if (typeof body.data === "string" && body.data) {
-        pluginLog.info(`[NeteaseEnhanced] ${musicInfo.name || id} -> 解灰(兜底)成功`);
+        pluginLog.info(`[NeteaseEnhanced] ${musicInfo.name || id} -> 解灰成功`);
+        const isTargetLossy = quality === "lq" || quality === "sq" || quality === "hq";
         return {
           ok: true,
           url: httpsify(body.data),
-          quality: "lossless",
+          quality: isTargetLossy ? quality : "lossless",
         };
       }
     } catch (e: any) {

@@ -215,16 +215,24 @@ export const handleApiRequest = async (
         return;
       }
 
-      // 需要内嵌标签：并行获取音频与封面图
+      // 需要内嵌标签：并行获取音频与封面图（优化封面体积并施加超时，大幅提升流水线速度）
       const fetchAudio = fetch(audioUrl, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        signal: AbortSignal.timeout(60000),
       }).then(async (r) => {
         if (!r.ok) throw new Error(`Fetch audio upstream failed: HTTP ${r.status}`);
         return r.arrayBuffer();
       });
 
-      const fetchCover = (data.embedCover && data.coverUrl)
-        ? fetch(data.coverUrl)
+      let coverUrl = data.coverUrl;
+      if (coverUrl && typeof coverUrl === "string" && coverUrl.includes("126.net") && !coverUrl.includes("param=")) {
+        coverUrl += (coverUrl.includes("?") ? "&" : "?") + "param=500y500";
+      }
+
+      const fetchCover = (data.embedCover && coverUrl)
+        ? fetch(coverUrl, {
+            signal: AbortSignal.timeout(3500),
+          })
             .then(async (r) => {
               if (!r.ok) return null;
               const mime = r.headers.get("content-type") || "image/jpeg";

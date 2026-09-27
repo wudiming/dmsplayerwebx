@@ -23,9 +23,11 @@ const LEVEL_TO_BR: Record<string, number> = {
 
 const song_download_url: NeteaseModule = (query, request) => {
   const level = String(query.level ?? "exhigh");
+  const isLossless = level === "lossless" || level === "hires";
   const data: Record<string, unknown> = {
     id: query.id,
     level,
+    encodeType: isLossless ? "flac" : "mp3",
   };
   if (LEVEL_TO_BR[level]) {
     data.br = LEVEL_TO_BR[level];

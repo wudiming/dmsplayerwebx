@@ -141,5 +141,17 @@ export const useDownload = () => {
   const retry = (task: DownloadTask): Promise<boolean> =>
     enqueue(task.track, { quality: task.qualityLevel, taskId: task.taskId });
 
-  return { enqueue, enqueueMany, retry };
+  /** 批量重试 */
+  const retryMany = async (tasks: DownloadTask[]): Promise<void> => {
+    let successCount = 0;
+    for (const task of tasks) {
+      const ok = await retry(task);
+      if (ok) successCount++;
+    }
+    if (successCount > 0) {
+      toast.success(t("download.enqueued", { count: successCount }));
+    }
+  };
+
+  return { enqueue, enqueueMany, retry, retryMany };
 };

@@ -683,6 +683,17 @@
     "alreadyDownloaded": "该歌曲已下载",
     "started": "已加入下载：{title}",
     "enqueued": "已加入 {count} 首下载",
+    "batchManage": "批量管理",
+    "batchExit": "完成",
+    "batchSelected": "已选 {count} 项",
+    "batchCancel": "批量暂停/取消",
+    "batchRetry": "批量重试",
+    "batchPlay": "播放选中",
+    "batchDelete": "批量删除记录",
+    "batchDeleteConfirmTitle": "批量删除下载记录",
+    "batchDeleteConfirmContent": "确定要删除选中的 {count} 个下载任务记录吗？（本地已下载的文件不会被删除）",
+    "batchCancelConfirmTitle": "批量暂停/取消下载",
+    "batchCancelConfirmContent": "确定要暂停/取消选中的 {count} 个下载任务吗？",
     "status": {
       "queued": "排队中",
       "downloading": "下载中",
@@ -929,9 +940,9 @@
     "spectrumColorMode": {
       "label": "频谱色彩模式",
       "description": "自定义动态频谱的视觉配色与渐变方案",
-      "pastel": "清新炫彩 (低饱和度)",
-      "aurora": "极光青蓝 (柔和渐变)",
-      "monochrome": "经典单色 (跟随封面)"
+      "pastel": "清新炫彩",
+      "aurora": "极光青蓝",
+      "monochrome": "经典单色"
     },
     "reverseSpectrum": {
       "label": "频谱反向",

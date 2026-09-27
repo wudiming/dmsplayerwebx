@@ -20,10 +20,27 @@ import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideTriangleAlert from "~icons/lucide/triangle-alert";
 import IconLucideFolderOpen from "~icons/lucide/folder-open";
+import SCheckbox from "@/components/ui/SCheckbox.vue";
+import { toast } from "@/composables/useToast";
 
-const props = defineProps<{
-  /** 当前 tab 已过滤好的下载任务 */
-  tasks: DownloadTask[];
+const props = withDefaults(
+  defineProps<{
+    /** 当前 tab 已过滤好的下载任务 */
+    tasks: DownloadTask[];
+    /** 是否开启批量管理模式 */
+    batchMode?: boolean;
+    /** 已选任务 taskId 集合 */
+    selectedTaskIds?: Set<string>;
+  }>(),
+  {
+    batchMode: false,
+    selectedTaskIds: () => new Set(),
+  },
+);
+
+const emit = defineEmits<{
+  toggleSelect: [taskId: string];
+  toggleSelectAll: [checked: boolean];
 }>();
 
 const { t } = useI18n();
@@ -31,6 +48,14 @@ const media = useMediaStore();
 const status = useStatusStore();
 const downloadStore = useDownloadStore();
 const { retry } = useDownload();
+
+const selectedCount = computed(() => props.selectedTaskIds.size);
+const isAllSelected = computed(
+  () => props.tasks.length > 0 && selectedCount.value === props.tasks.length,
+);
+const isIndeterminate = computed(
+  () => selectedCount.value > 0 && !isAllSelected.value,
+);
 
 const STATUS_KEY: Record<DownloadStatus, string> = {
   queued: "download.status.queued",
@@ -137,7 +162,15 @@ defineExpose({ playAll });
     <template #header>
       <div class="pr-1.5">
         <div class="flex items-center gap-3 pl-3 pr-6 mx-3 h-10 text-sm text-on-surface-variant/60">
-          <div class="w-8 shrink-0 flex items-center justify-center"><span>#</span></div>
+          <div class="w-8 shrink-0 flex items-center justify-center">
+            <SCheckbox
+              v-if="batchMode"
+              :checked="isAllSelected"
+              :indeterminate="isIndeterminate"
+              @update:checked="emit('toggleSelectAll', $event)"
+            />
+            <span v-else>#</span>
+          </div>
           <div class="flex-1 min-w-0 px-1.5">{{ t("songList.title") }}</div>
           <div class="w-32 shrink-0">{{ t("download.colStatus") }}</div>
           <div class="w-20 shrink-0 text-center">{{ t("download.colSize") }}</div>
@@ -151,16 +184,26 @@ defineExpose({ playAll });
       <div class="px-3 pb-3">
         <div
           class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl border-2 border-solid transition-[background-color,border-color] duration-200"
-          :class="rowClass(item)"
-          @dblclick="isDone(item) ? playTask(item) : undefined"
+          :class="[
+            rowClass(item),
+            batchMode && selectedTaskIds.has(item.taskId) ? '!bg-primary/20 !border-primary/50' : '',
+          ]"
+          @click="batchMode ? emit('toggleSelect', item.taskId) : undefined"
+          @dblclick="!batchMode && isDone(item) ? playTask(item) : undefined"
         >
-          <!-- 序号 / 状态图标 -->
+          <!-- 序号 / 多选框 / 状态图标 -->
           <div
             class="w-8 shrink-0 flex items-center justify-center relative"
             :class="isPlaying(item) ? 'text-primary' : 'text-on-surface-variant'"
-            @click.stop="onIndexClick(item)"
+            @click.stop="batchMode ? emit('toggleSelect', item.taskId) : onIndexClick(item)"
           >
-            <template v-if="isDone(item)">
+            <SCheckbox
+              v-if="batchMode"
+              :checked="selectedTaskIds.has(item.taskId)"
+              @update:checked="emit('toggleSelect', item.taskId)"
+              @click.stop
+            />
+            <template v-else-if="isDone(item)">
               <span
                 v-if="!isPlaying(item)"
                 class="text-sm font-bold tabular-nums group-hover:opacity-0 transition-opacity duration-300"

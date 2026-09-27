@@ -116,8 +116,10 @@ export interface DownloadApi {
   start: (req: DownloadRequest) => Promise<EnqueueResult>;
   startMany: (reqs: DownloadRequest[]) => Promise<EnqueueResult[]>;
   cancel: (taskId: string) => Promise<void>;
+  cancelMany: (taskIds: string[]) => Promise<void>;
   retry: (req: DownloadRequest) => Promise<EnqueueResult>;
   remove: (taskId: string) => Promise<void>;
+  removeMany: (taskIds: string[]) => Promise<void>;
   clearFinished: () => Promise<void>;
   list: () => Promise<DownloadTask[]>;
   pickDir: () => Promise<{ ok: boolean; dir: string; reason?: "canceled" }>;

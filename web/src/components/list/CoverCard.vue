@@ -54,34 +54,49 @@ const formatPlayCount = (count?: number): string => {
         <IconLucidePlay class="size-2.5 fill-white" />
         <span>{{ formatPlayCount(item.playCount) }}</span>
       </div>
-      <!-- 歌单歌曲数与收听量徽标（鼠标悬停划出，位于播放键左侧） -->
+      <!-- 歌手头像指示 -->
       <div
-        v-if="type === 'default' && (item.trackCount || item.playCount)"
-        class="absolute left-2 bottom-2 max-w-[calc(100%-3.25rem)] flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-300 shadow-md select-none pointer-events-none"
+        v-if="type === 'artist'"
+        class="absolute inset-0 m-auto size-9 flex items-center justify-center rounded-full opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100 shadow-md"
       >
-        <span v-if="item.trackCount" class="flex items-center gap-1 shrink-0">
-          <IconLucideListMusic class="size-3 text-white/80" />
-          <span>{{ item.trackCount }}首</span>
-        </span>
-        <span v-if="item.trackCount && item.playCount" class="w-0.5 h-2 bg-white/30 rounded-full shrink-0" />
-        <span v-if="item.playCount" class="flex items-center gap-1 shrink-0">
-          <IconLucideHeadphones class="size-3 text-white/80" />
-          <span>{{ formatPlayCount(item.playCount) }}</span>
-        </span>
+        <IconLucideUser class="size-8 text-white" />
       </div>
-      <!-- 播放按钮 -->
+      <!-- 视频播放按钮 -->
       <div
-        class="absolute size-9 flex items-center justify-center rounded-full opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100 shadow-md"
-        :class="
-          type === 'artist'
-            ? 'inset-0 m-auto'
-            : type === 'video'
-              ? 'inset-0 m-auto bg-black/60 scale-90 group-hover:scale-110 size-11'
-              : 'right-2 bottom-2 bg-white/50 translate-y-1.5 group-hover:translate-y-0'
-        "
+        v-else-if="type === 'video'"
+        class="absolute inset-0 m-auto size-11 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm scale-90 group-hover:scale-110 opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100 shadow-md"
       >
-        <IconLucidePlay v-if="type !== 'artist'" class="size-5 text-white" />
-        <IconLucideUser v-else class="size-8 text-white" />
+        <IconLucidePlay class="size-5 text-white fill-white ml-0.5" />
+      </div>
+      <!-- 歌单一体化交互条：结合歌曲数、收听量与播放按钮 -->
+      <div
+        v-else
+        class="absolute right-2 bottom-2 flex items-center rounded-full bg-black/65 backdrop-blur-md border border-white/15 text-white shadow-lg opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-[opacity,transform] duration-300 select-none max-w-[calc(100%-1rem)]"
+        :class="item.trackCount || item.playCount ? 'pl-2.5 pr-1 py-1 gap-2' : 'p-1'"
+      >
+        <div
+          v-if="item.trackCount || item.playCount"
+          class="flex items-center gap-1.5 text-[11px] font-medium text-white/90 min-w-0 truncate"
+        >
+          <span v-if="item.trackCount" class="flex items-center gap-1 shrink-0">
+            <IconLucideListMusic class="size-3 text-white/75" />
+            <span>{{ item.trackCount }}首</span>
+          </span>
+          <span v-if="item.trackCount && item.playCount" class="w-0.5 h-2 bg-white/30 rounded-full shrink-0" />
+          <span v-if="item.playCount" class="flex items-center gap-1 shrink-0">
+            <IconLucideHeadphones class="size-3 text-white/75" />
+            <span>{{ formatPlayCount(item.playCount) }}</span>
+          </span>
+        </div>
+        <div
+          class="rounded-full bg-white/25 hover:bg-white/40 active:scale-90 transition-all flex items-center justify-center shrink-0 shadow-sm"
+          :class="item.trackCount || item.playCount ? 'size-7' : 'size-8'"
+        >
+          <IconLucidePlay
+            class="text-white fill-white ml-0.5"
+            :class="item.trackCount || item.playCount ? 'size-3.5' : 'size-4.5'"
+          />
+        </div>
       </div>
     </div>
     <!-- 信息 -->

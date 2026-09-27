@@ -67,10 +67,21 @@ export const useDownloadStore = defineStore("download", () => {
 
   const cancel = (taskId: string): void => void window.api.download.cancel(taskId);
 
+  const cancelMany = (taskIds: string[]): void => {
+    void window.api.download.cancelMany(taskIds);
+  };
+
   const remove = (taskId: string): void => {
     activeTasks.value = activeTasks.value.filter((item) => item.taskId !== taskId);
     historyTasks.value = historyTasks.value.filter((item) => item.taskId !== taskId);
     void window.api.download.remove(taskId);
+  };
+
+  const removeMany = (taskIds: string[]): void => {
+    const idSet = new Set(taskIds);
+    activeTasks.value = activeTasks.value.filter((item) => !idSet.has(item.taskId));
+    historyTasks.value = historyTasks.value.filter((item) => !idSet.has(item.taskId));
+    void window.api.download.removeMany(taskIds);
   };
 
   const clearFinished = (): void => {
@@ -83,5 +94,5 @@ export const useDownloadStore = defineStore("download", () => {
     unsubscribers.length = 0;
   });
 
-  return { activeTasks, historyTasks, activeCount, init, cancel, remove, clearFinished };
+  return { activeTasks, historyTasks, activeCount, init, cancel, cancelMany, remove, removeMany, clearFinished };
 });

@@ -161,6 +161,32 @@ export const resolveNeteaseDownloadUrl = async (
   usePlayback = false,
 ): Promise<NeteaseDownloadSource | null> => {
   const level = NETEASE_LEVEL[songLevel];
+  const isLosslessTarget = songLevel === "lossless" || songLevel === "hi-res";
+
+  // 若目标为有损音质（lq/sq/hq），优先走播放接口：
+  // 播放接口严格按 level 返回对应 128k/192k/320k MP3（体积仅3-8MB），且不消耗下载配额；
+  // 避免官方下载接口无视有损参数直接下发 20~30MB 无损 FLAC
+  if (!isLosslessTarget) {
+    const playSource = await fetchNeteasePlaySource(track.id, level);
+    if (playSource && playSource.format?.toLowerCase() !== "flac") {
+      return playSource;
+    }
+    if (!usePlayback) {
+      const downloaded = await fetchNeteaseDownloadSource(track.id, level);
+      if (downloaded) {
+        // 若下载接口返回的是 flac，但用户选择的是有损，坚决拒绝大文件 FLAC
+        if (
+          downloaded.format?.toLowerCase() !== "flac" &&
+          (!downloaded.size || downloaded.size < 16 * 1024 * 1024)
+        ) {
+          return downloaded;
+        }
+      }
+    }
+    return playSource;
+  }
+
+  // 目标为无损/Hi-Res
   if (!usePlayback) {
     const downloaded = await fetchNeteaseDownloadSource(track.id, level);
     if (downloaded) return downloaded;

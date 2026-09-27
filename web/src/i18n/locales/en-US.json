@@ -695,6 +695,17 @@
     "alreadyDownloaded": "Already downloaded",
     "started": "Added to downloads: {title}",
     "enqueued": "Added {count} to downloads",
+    "batchManage": "Batch Manage",
+    "batchExit": "Done",
+    "batchSelected": "{count} selected",
+    "batchCancel": "Pause / Cancel",
+    "batchRetry": "Retry Selected",
+    "batchPlay": "Play Selected",
+    "batchDelete": "Delete Records",
+    "batchDeleteConfirmTitle": "Delete Task Records",
+    "batchDeleteConfirmContent": "Are you sure you want to delete {count} selected download records? (Files on disk will not be deleted)",
+    "batchCancelConfirmTitle": "Cancel Download Tasks",
+    "batchCancelConfirmContent": "Are you sure you want to pause/cancel {count} selected tasks?",
     "status": {
       "queued": "Queued",
       "downloading": "Downloading",
@@ -941,9 +952,9 @@
     "spectrumColorMode": {
       "label": "Spectrum Color Mode",
       "description": "Customize visual color scheme and gradient for the dynamic spectrum",
-      "pastel": "Pastel Rainbow (Low Saturation)",
-      "aurora": "Aurora Gradient",
-      "monochrome": "Monochrome (Follow Cover)"
+      "pastel": "Pastel Rainbow",
+      "aurora": "Aurora",
+      "monochrome": "Monochrome"
     },
     "reverseSpectrum": {
       "label": "Reverse Spectrum",

@@ -99,9 +99,10 @@ class WebDownloadManager {
     return [...this.tasks];
   }
 
-  private maxConcurrent = 3;
+  private maxConcurrent = 5;
   private runningCount = 0;
   private pendingRequests: Map<string, DownloadRequest> = new Map();
+  private abortControllers: Map<string, AbortController> = new Map();
 
   public async start(req: DownloadRequest): Promise<{ ok: boolean; reason?: "downloaded" | "queued" }> {
     const existing = this.tasks.find((t) => t.taskId === req.taskId);
@@ -158,6 +159,9 @@ class WebDownloadManager {
   }
 
   private async processTask(task: DownloadTask, req: DownloadRequest) {
+    const ac = new AbortController();
+    this.abortControllers.set(task.taskId, ac);
+
     task.status = "downloading";
     this.emitState(task);
 
@@ -356,6 +360,7 @@ class WebDownloadManager {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(processPayload),
+        signal: ac.signal,
       });
 
       if (!response.ok || !response.body) {
@@ -449,11 +454,19 @@ class WebDownloadManager {
       task.finishedAt = Date.now();
       this.emitState(task);
     } catch (err: any) {
+      if (ac.signal.aborted || err?.name === "AbortError" || task.status === "canceled") {
+        task.status = "canceled";
+        task.finishedAt = Date.now();
+        this.emitState(task);
+        return;
+      }
       console.error("[WebDownloadManager] download failed", err);
       task.status = "failed";
       task.errorCode = err?.message || "DOWNLOAD_FAILED";
       task.finishedAt = Date.now();
       this.emitState(task);
+    } finally {
+      this.abortControllers.delete(task.taskId);
     }
   }
 
@@ -462,7 +475,6 @@ class WebDownloadManager {
     for (const req of requests) {
       const res = await this.start(req);
       results.push({ ok: res.ok, taskId: req.taskId });
-      await new Promise((r) => setTimeout(r, 200));
     }
     return results;
   }
@@ -473,7 +485,28 @@ class WebDownloadManager {
       task.status = "canceled";
       task.finishedAt = Date.now();
       this.pendingRequests.delete(taskId);
+      this.abortControllers.get(taskId)?.abort();
+      this.abortControllers.delete(taskId);
       this.emitState(task);
+      this.scheduleNext();
+    }
+  }
+
+  public async cancelMany(taskIds: string[]): Promise<void> {
+    const idSet = new Set(taskIds);
+    let changed = false;
+    for (const task of this.tasks) {
+      if (idSet.has(task.taskId) && (task.status === "queued" || task.status === "downloading")) {
+        task.status = "canceled";
+        task.finishedAt = Date.now();
+        this.pendingRequests.delete(task.taskId);
+        this.abortControllers.get(task.taskId)?.abort();
+        this.abortControllers.delete(task.taskId);
+        this.emitState(task);
+        changed = true;
+      }
+    }
+    if (changed) {
       this.scheduleNext();
     }
   }
@@ -484,7 +517,21 @@ class WebDownloadManager {
 
   public async remove(taskId: string): Promise<void> {
     this.pendingRequests.delete(taskId);
+    this.abortControllers.get(taskId)?.abort();
+    this.abortControllers.delete(taskId);
     this.tasks = this.tasks.filter((t) => t.taskId !== taskId);
+    this.saveToStorage();
+    this.scheduleNext();
+  }
+
+  public async removeMany(taskIds: string[]): Promise<void> {
+    const idSet = new Set(taskIds);
+    for (const id of taskIds) {
+      this.pendingRequests.delete(id);
+      this.abortControllers.get(id)?.abort();
+      this.abortControllers.delete(id);
+    }
+    this.tasks = this.tasks.filter((t) => !idSet.has(t.taskId));
     this.saveToStorage();
     this.scheduleNext();
   }
