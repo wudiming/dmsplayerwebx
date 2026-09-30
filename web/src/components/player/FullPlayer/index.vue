@@ -95,6 +95,15 @@ watch(
   () => lyricRef.value?.setCurrentTime(getCurrentTime() + status.lyricOffsetMs),
 );
 
+// 歌词偏移调整时立即刷新当前渲染时间（播放或暂停均实时生效）
+watch(
+  () => status.lyricOffsetMs,
+  (newOffset) => {
+    initialLyricTimeMs.value = getCurrentTime() + newOffset;
+    lyricRef.value?.setCurrentTime(getCurrentTime() + newOffset, true);
+  },
+);
+
 // 切换歌词引擎时，重新计算初始并推送时间
 watch(
   () => settings.lyric.engine,

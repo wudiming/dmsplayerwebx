@@ -32,8 +32,13 @@ import type {
   PlayEventInput,
   FavoriteEventInput,
 } from "@shared/types/stats";
-
-
+import type { LyricLine, LyricData } from "@shared/types/lyrics";
+import type {
+  NowPlayingUpdatePayload,
+  NowPlayingSnapshot,
+  NowPlayingPositionSync,
+  NowPlayingLyricOffsetSync,
+} from "@shared/types/nowPlaying";
 import type {
   StreamingServerConfig,
   StreamingServerInput,
@@ -1390,6 +1395,42 @@ async function callNeteaseBridge<T = any>(
   return data.body as T;
 }
 
+// ─── NowPlaying 状态与歌词延时管理 ───
+const LYRIC_OFFSET_LIMIT_MS = 60_000;
+
+function getOffsetStorageKey(trackId: string, source: LyricData | null | undefined): string {
+  if (!source) return trackId;
+  const src =
+    source.source === "online" && source.platform ? `online:${source.platform}` : source.source;
+  return `${trackId}|${src}`;
+}
+
+let currentNowPlayingTrack: Track | null = null;
+let currentNowPlayingLyric: LyricLine[] = [];
+let currentNowPlayingSource: LyricData | null = null;
+let currentLyricOffsetMs = 0;
+let currentOffsetStorageKey = "";
+
+const lyricOffsetListeners = new Set<(data: NowPlayingLyricOffsetSync) => void>();
+const trackChangeListeners = new Set<(data: { track: Track | null }) => void>();
+const lyricChangeListeners = new Set<(snapshot: NowPlayingSnapshot) => void>();
+const positionSyncListeners = new Set<(data: NowPlayingPositionSync) => void>();
+
+function getNowPlayingSnapshot(): NowPlayingSnapshot {
+  const status = playerEngine.getStatus();
+  return {
+    track: currentNowPlayingTrack,
+    lyric: currentNowPlayingLyric,
+    source: (currentNowPlayingSource || { source: "online" }) as LyricData,
+    position: status.position,
+    playing: status.state === "playing",
+    state: status.state,
+    speed: 1.0,
+    lyricOffsetMs: currentLyricOffsetMs,
+    sendTimestamp: Date.now(),
+  };
+}
+
 // ─── 4. 构建 window.api 完整门面 ───
 
 const webApi = {
@@ -1863,13 +1904,112 @@ const webApi = {
   },
 
   nowPlaying: {
-    update: () => {},
-    requestSnapshot: async () => ({ lyricOffsetMs: 0, track: null }),
-    onLyricOffsetChange: () => () => {},
-    setLyricOffset: async () => {},
-    onTrackChange: () => () => {},
-    onLyricChange: () => () => {},
-    onPositionSync: () => () => {},
+    update: (payload: NowPlayingUpdatePayload) => {
+      const trackChanged = (currentNowPlayingTrack?.id ?? null) !== (payload.track?.id ?? null);
+      currentNowPlayingTrack = payload.track;
+      currentNowPlayingLyric = payload.lyric || [];
+      currentNowPlayingSource = payload.source;
+
+      if (trackChanged) {
+        trackChangeListeners.forEach((cb) => {
+          try {
+            cb({ track: payload.track });
+          } catch (e) {
+            console.error("[web-bridge] nowPlaying trackChange listener error:", e);
+          }
+        });
+      }
+
+      const key = payload.track?.id ? getOffsetStorageKey(String(payload.track.id), payload.source) : "";
+      if (trackChanged || key !== currentOffsetStorageKey) {
+        currentOffsetStorageKey = key;
+        const cfg = getStoredConfig();
+        currentLyricOffsetMs = key && cfg.player?.lyricOffsets ? (cfg.player.lyricOffsets[key] ?? 0) : 0;
+        const offsetData: NowPlayingLyricOffsetSync = {
+          trackId: payload.track?.id ? String(payload.track.id) : null,
+          offsetMs: currentLyricOffsetMs,
+        };
+        lyricOffsetListeners.forEach((cb) => {
+          try {
+            cb(offsetData);
+          } catch (e) {
+            console.error("[web-bridge] nowPlaying lyricOffset listener error:", e);
+          }
+        });
+      }
+
+      const snap = getNowPlayingSnapshot();
+      lyricChangeListeners.forEach((cb) => {
+        try {
+          cb(snap);
+        } catch (e) {
+          console.error("[web-bridge] nowPlaying lyricChange listener error:", e);
+        }
+      });
+    },
+
+    requestSnapshot: async () => getNowPlayingSnapshot(),
+
+    setLyricOffset: (trackId: string, offsetMs: number) => {
+      if (!trackId) return;
+      const normalized = Number.isFinite(offsetMs) ? Math.trunc(offsetMs) : 0;
+      const value = Math.max(-LYRIC_OFFSET_LIMIT_MS, Math.min(LYRIC_OFFSET_LIMIT_MS, normalized));
+      const key = getOffsetStorageKey(String(trackId), currentNowPlayingSource);
+      const cfg = getStoredConfig();
+      if (!cfg.player) {
+        cfg.player = structuredClone(defaultSystemConfig.player);
+      }
+      if (!cfg.player.lyricOffsets) {
+        cfg.player.lyricOffsets = {};
+      }
+      if (value === 0) {
+        delete cfg.player.lyricOffsets[key];
+      } else {
+        cfg.player.lyricOffsets[key] = value;
+      }
+      saveStoredConfig(cfg);
+
+      currentLyricOffsetMs = value;
+      const offsetData: NowPlayingLyricOffsetSync = {
+        trackId: String(trackId),
+        offsetMs: value,
+      };
+      lyricOffsetListeners.forEach((cb) => {
+        try {
+          cb(offsetData);
+        } catch (e) {
+          console.error("[web-bridge] nowPlaying lyricOffset listener error:", e);
+        }
+      });
+    },
+
+    onTrackChange: (callback: (data: { track: Track | null }) => void) => {
+      trackChangeListeners.add(callback);
+      return () => {
+        trackChangeListeners.delete(callback);
+      };
+    },
+
+    onLyricChange: (callback: (snapshot: NowPlayingSnapshot) => void) => {
+      lyricChangeListeners.add(callback);
+      return () => {
+        lyricChangeListeners.delete(callback);
+      };
+    },
+
+    onPositionSync: (callback: (data: NowPlayingPositionSync) => void) => {
+      positionSyncListeners.add(callback);
+      return () => {
+        positionSyncListeners.delete(callback);
+      };
+    },
+
+    onLyricOffsetChange: (callback: (data: NowPlayingLyricOffsetSync) => void) => {
+      lyricOffsetListeners.add(callback);
+      return () => {
+        lyricOffsetListeners.delete(callback);
+      };
+    },
   },
 
   plugins: {

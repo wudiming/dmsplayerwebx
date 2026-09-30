@@ -20,7 +20,7 @@ const LYRIC_OFFSET_STEP = 500;
 /** 偏移弹层是否打开；打开期间按钮组保持可见 */
 const offsetPopoverOpen = ref(false);
 
-const hasTrack = computed(() => !!media.track);
+const hasTrack = computed(() => !!(media.track || status.currentTrack));
 
 /** 当前是否有可复制的歌词 */
 const hasLyric = computed(() => media.parsedLyric.length > 0);
@@ -33,9 +33,11 @@ const songOffset = computed(() => status.lyricOffsetMs);
 
 /** 写入偏移 */
 const writeOffset = (offsetMs: number): void => {
-  const id = media.track?.id;
+  const id = media.track?.id ?? status.currentTrack?.id;
   if (!id) return;
-  window.api.nowPlaying.setLyricOffset(id, offsetMs);
+  const normalized = Number.isFinite(offsetMs) ? Math.trunc(offsetMs) : 0;
+  status.lyricOffsetMs = normalized;
+  window.api.nowPlaying.setLyricOffset(String(id), normalized);
 };
 
 /** 弹层里直接编辑（ms） */
@@ -100,6 +102,8 @@ const resetLyricOffset = (): void => writeOffset(0);
         <p class="m-0 text-xs text-cover/60">{{ t("player.lyricOffset.hint") }}</p>
         <SNumberInput
           v-model="offsetInputMs"
+          :min="-60000"
+          :max="60000"
           :step="100"
           size="small"
           unit="ms"

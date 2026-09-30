@@ -421,10 +421,6 @@ const activePoint = computed(() =>
   activeHourlyItem.value ? hourlyPoints.value[activeHourlyItem.value.hour] : null,
 );
 
-const peakPoint = computed(() =>
-  peakHour.value ? hourlyPoints.value[peakHour.value.hour] : null,
-);
-
 const activeLabelX = computed(() => Math.min(208, Math.max(32, activePoint.value?.x ?? 0)));
 /** 优化悬浮色块位置：固定在图表顶部空旷优雅区（y: 18），跟随 X 轴滑动，不与曲线和圆点粘连 */
 const activeLabelY = computed(() => 18);
@@ -666,15 +662,6 @@ const codecLabel = (codec: string): string => {
           </template>
         </svg>
 
-        <!-- 静态常驻最高峰值点（未悬停时静默呈现） -->
-        <div
-          v-if="!loading && hourlyTotal > 0 && peakPoint && hoveredHour === null"
-          class="pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/70 ring-2 ring-surface-panel shadow-sm"
-          :style="{
-            left: `${(peakPoint.x / 240) * 100}%`,
-            top: `${(peakPoint.y / 128) * 100}%`,
-          }"
-        />
 
         <!-- 当前指示点（仅在鼠标在线上悬停时显示） -->
         <div
